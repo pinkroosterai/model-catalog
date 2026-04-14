@@ -1,0 +1,11 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Clarive.ModelRegistry.Service/Clarive.ModelRegistry.Service.csproj" />
+    <Project Path="src/Clarive.ModelRegistry.Client/Clarive.ModelRegistry.Client.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Clarive.ModelRegistry.Service.Tests/Clarive.ModelRegistry.Service.Tests.csproj" />
+    <Project Path="tests/Clarive.ModelRegistry.Service.IntegrationTests/Clarive.ModelRegistry.Service.IntegrationTests.csproj" />
+    <Project Path="tests/Clarive.ModelRegistry.Client.Tests/Clarive.ModelRegistry.Client.Tests.csproj" />
+  </Folder>
+</Solution>

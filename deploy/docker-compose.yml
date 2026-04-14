@@ -1,0 +1,18 @@
+services:
+  model-registry:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    container_name: model-registry
+    ports:
+      - "8090:8080"
+    volumes:
+      - model-registry-data:/app/data
+    environment:
+      ASPNETCORE_URLS: http://+:8080
+      ModelRegistry__ApiKeys__0__Name: dev
+      ModelRegistry__ApiKeys__0__Key: ${MODEL_REGISTRY_DEV_KEY:-devkey}
+    restart: unless-stopped
+
+volumes:
+  model-registry-data:

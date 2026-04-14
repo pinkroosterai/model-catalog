@@ -1,0 +1,29 @@
+{
+  "gpt-5": {
+    "max_input_tokens": 400000,
+    "max_output_tokens": 128000,
+    "input_cost_per_token": 0.0000025,
+    "output_cost_per_token": 0.00001,
+    "mode": "chat",
+    "supports_function_calling": true,
+    "supports_response_schema": true,
+    "supports_reasoning": false,
+    "litellm_provider": "openai"
+  },
+  "claude-sonnet-4.6": {
+    "max_input_tokens": 200000,
+    "max_output_tokens": 64000,
+    "input_cost_per_token": 0.000003,
+    "output_cost_per_token": 0.000015,
+    "mode": "chat",
+    "supports_function_calling": true,
+    "supports_reasoning": true,
+    "litellm_provider": "anthropic"
+  },
+  "text-embedding-3-small": {
+    "max_input_tokens": 8191,
+    "input_cost_per_token": 0.00000002,
+    "mode": "embedding",
+    "litellm_provider": "openai"
+  }
+}
