@@ -5,6 +5,7 @@ using Xunit;
 
 namespace ModelCatalog.Service.IntegrationTests;
 
+[Collection("Refresh")]
 public class RefreshEndpointTests
 {
     [Fact]

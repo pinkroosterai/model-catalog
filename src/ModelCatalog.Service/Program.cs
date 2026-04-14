@@ -83,7 +83,6 @@ var app = builder.Build();
 
 await app.Services.GetRequiredService<SnapshotStore>().TryLoadFromDiskAsync(CancellationToken.None);
 
-app.UseMiddleware<ApiKeyMiddleware>();
 app.MapOpenApi();
 app.UseHttpMetrics();
 app.MapMetrics();
@@ -95,7 +94,9 @@ v1.MapMetaEndpoints(
     app.Services.GetRequiredService<SnapshotStore>(),
     app.Services.GetRequiredService<TimeProvider>(),
     TimeSpan.FromHours(staleHours));
-v1.MapRefreshEndpoints(app.Services.GetRequiredService<SyncPipeline>());
+v1.MapRefreshEndpoints(
+    app.Services.GetRequiredService<SyncPipeline>(),
+    app.Services.GetRequiredService<IOptionsMonitor<ApiKeyOptions>>());
 
 app.MapGet("/healthz", (SnapshotStore store, TimeProvider clock) =>
 {

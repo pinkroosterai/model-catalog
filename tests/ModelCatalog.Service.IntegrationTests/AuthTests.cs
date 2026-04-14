@@ -14,18 +14,19 @@ public class AuthTests : IClassFixture<TestAppFactory>
     }
 
     [Fact]
-    public async Task Unauthenticated_Returns401()
+    public async Task Refresh_WithoutApiKey_Returns401()
     {
-        var resp = await _factory.CreateClient().GetAsync(new Uri("/v1/models", UriKind.Relative));
+        var c = _factory.CreateClient();
+        var resp = await c.PostAsync(new Uri("/v1/refresh", UriKind.Relative), content: null);
         resp.StatusCode.Should().Be(System.Net.HttpStatusCode.Unauthorized);
     }
 
     [Fact]
-    public async Task WrongKey_Returns401()
+    public async Task Refresh_WithWrongApiKey_Returns401()
     {
         var c = _factory.CreateClient();
-        c.DefaultRequestHeaders.Add("X-Api-Key", "wrong");
-        var resp = await c.GetAsync(new Uri("/v1/models", UriKind.Relative));
+        c.DefaultRequestHeaders.Add("X-Api-Key", "wrong-" + Guid.NewGuid());
+        var resp = await c.PostAsync(new Uri("/v1/refresh", UriKind.Relative), content: null);
         resp.StatusCode.Should().Be(System.Net.HttpStatusCode.Unauthorized);
     }
 
