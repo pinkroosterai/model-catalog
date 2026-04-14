@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <IsPackable>true</IsPackable>
+    <PackageId>ModelCatalog.Client</PackageId>
+    <Authors>pinkroosterai</Authors>
+    <Description>Typed .NET client for ModelCatalog — a public catalog of LLM model pricing and capabilities aggregated from LiteLLM, OpenRouter, and models.dev.</Description>
+    <PackageProjectUrl>https://github.com/pinkroosterai/model-catalog</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/pinkroosterai/model-catalog</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageTags>llm;openai;openrouter;litellm;pricing;catalog</PackageTags>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <Version>0.1.0</Version>
+    <NoWarn>$(NoWarn);CS1591;MA0048</NoWarn>
+  </PropertyGroup>
+  <ItemGroup>
+    <None Include="../../README.md" Pack="true" PackagePath="/" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Http" />
+    <PackageReference Include="Microsoft.Extensions.Http.Polly" />
+    <PackageReference Include="Microsoft.Extensions.Caching.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Caching.Memory" />
+    <PackageReference Include="Polly" />
+  </ItemGroup>
+</Project>

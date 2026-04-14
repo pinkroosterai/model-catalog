@@ -1,0 +1,11 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/ModelCatalog.Service/ModelCatalog.Service.csproj" />
+    <Project Path="src/ModelCatalog.Client/ModelCatalog.Client.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/ModelCatalog.Service.Tests/ModelCatalog.Service.Tests.csproj" />
+    <Project Path="tests/ModelCatalog.Service.IntegrationTests/ModelCatalog.Service.IntegrationTests.csproj" />
+    <Project Path="tests/ModelCatalog.Client.Tests/ModelCatalog.Client.Tests.csproj" />
+  </Folder>
+</Solution>
