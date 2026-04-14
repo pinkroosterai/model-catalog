@@ -1,7 +1,7 @@
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 COPY . .
-RUN dotnet publish src/ModelCatalog.Service/Clarive.ModelRegistry.Service.csproj \
+RUN dotnet publish src/ModelCatalog.Service/ModelCatalog.Service.csproj \
     -c Release -o /app/publish --no-self-contained
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0-alpine AS runtime
