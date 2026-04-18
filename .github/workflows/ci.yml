@@ -13,10 +13,10 @@ jobs:
         with:
           global-json-file: global.json
       - run: dotnet tool install --global CSharpier --version 1.2.*
-      - run: dotnet restore ModelRegistry.slnx
+      - run: dotnet restore ModelCatalog.slnx
       - run: dotnet csharpier check src tests
-      - run: dotnet build ModelRegistry.slnx --no-restore -c Release
-      - run: dotnet test ModelRegistry.slnx --no-build -c Release --logger "trx;LogFileName=tests.trx"
+      - run: dotnet build ModelCatalog.slnx --no-restore -c Release
+      - run: dotnet test ModelCatalog.slnx --no-build -c Release --logger "trx;LogFileName=tests.trx"
       - uses: dorny/test-reporter@v1
         if: always()
         with:
