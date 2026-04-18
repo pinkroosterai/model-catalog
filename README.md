@@ -44,6 +44,172 @@ public sealed class MyService(IModelCatalogClient catalog)
 curl https://models.pinkrooster.nl/v1/models/openai/gpt-4o
 ```
 
+## Client SDK
+
+The `ModelCatalog.Client` NuGet package ships a typed client with request coalescing, response caching, transient-error retries, a circuit breaker, and stale-grace fallback when the service is unreachable. Targets `net10.0`.
+
+### Registration
+
+```csharp
+using ModelCatalog.Client;
+
+builder.Services.AddModelCatalogClient(opts =>
+{
+    opts.BaseUrl = "https://models.pinkrooster.nl";
+    // opts.ApiKey = "..."; // only needed to call POST /v1/refresh
+});
+```
+
+`AddModelCatalogClient` wires up:
+
+- `IModelCatalogClient` bound to a typed `HttpClient`
+- Polly retry (3 attempts, exponential backoff 1s/4s/16s) + circuit breaker (5 failures → 5 min open)
+- An `ApiKeyHandler` `DelegatingHandler` that attaches `X-Api-Key` on every outbound request
+- An in-memory `IDistributedCache` by default — register `AddStackExchangeRedisCache(...)` (or any other `IDistributedCache` implementation) **before** the call to share cache across processes
+- `TimeProvider.System`
+
+All registrations use `TryAdd*`, so your own `IDistributedCache`, `TimeProvider`, or `ILoggerFactory` wins.
+
+### Surface
+
+```csharp
+public interface IModelCatalogClient
+{
+    Task<ModelInfo?> GetModelAsync(string canonicalId, CancellationToken ct = default);
+    Task<ModelInfo?> GetModelAsync(string provider, string modelId, CancellationToken ct = default);
+    Task<IReadOnlyList<ModelInfo>> ListModelsAsync(ModelQuery? query = null, CancellationToken ct = default);
+    Task<CatalogMeta>              GetMetaAsync(CancellationToken ct = default);
+}
+```
+
+- `GetModelAsync` returns `null` when the model is not known to the catalog. `null` is cached, so repeated unknown-model lookups don't hammer the service.
+- `ListModelsAsync` accepts a `ModelQuery` (`Provider`, `Modality`, `IsReasoning`, `SupportsFunctionCalling`). Each distinct query hits a distinct cache key.
+- `GetMetaAsync` reports the service-side snapshot timestamp, per-source state, and a `Healthy` flag derived from the service's stale-threshold.
+
+### Options
+
+| Option           | Default  | Purpose |
+|------------------|----------|---------|
+| `BaseUrl`        | required | ModelCatalog service URL. |
+| `ApiKey`         | empty    | Attached as `X-Api-Key` on every request. Only `POST /v1/refresh` validates it; read endpoints ignore it. |
+| `CacheTtl`       | 1 h      | Fresh window. Within this, responses are served from the distributed cache with no network. |
+| `StaleGrace`     | 24 h     | Grace window past `CacheTtl` during which a stale cached value is served as a fallback **only** if the upstream fetch fails. A successful fetch always overwrites the cache. |
+| `RequestTimeout` | 10 s     | Per-request `HttpClient.Timeout`, also imposed via a linked `CancellationTokenSource`. |
+
+### Caching semantics
+
+1. **Fresh hit** (`age ≤ CacheTtl`) — returned immediately, no network.
+2. **Fresh miss** — a `SemaphoreSlim` coalesces concurrent callers for the same key so only one fetches; the rest read the resulting cache entry.
+3. **Fetch failure** — if a stale entry exists within `CacheTtl + StaleGrace`, it's returned and a `StaleServed` warning is logged. Otherwise the original exception propagates.
+4. **404 on `GetModelAsync`** — persisted as a `null` entry so repeated unknown-model lookups stay cheap.
+
+Cache keys are namespaced `modelregistry:v1:*`, safe to share a Redis instance with other services.
+
+### Calculating the cost of a call
+
+The main reason to use this catalog is precise cost accounting. The `Pricing` record carries every rate a real API call can be charged against:
+
+```csharp
+public sealed record Pricing(
+    decimal? InputCostPerMillion,
+    decimal? OutputCostPerMillion,
+    decimal? CachedInputCostPerMillion,
+    decimal? ReasoningOutputCostPerMillion,
+    decimal? CacheWriteCostPerMillion                    = null, // 5-min TTL (Anthropic) / first-token write (OpenAI, Gemini)
+    decimal? CacheWrite1hCostPerMillion                  = null, // Anthropic 1-hour TTL
+    decimal? InputCostPerMillionAboveContextThreshold    = null,
+    decimal? OutputCostPerMillionAboveContextThreshold   = null,
+    long?    ContextThresholdTokens                      = null, // e.g. 200_000 for Gemini 2.5 Pro
+    decimal? BatchDiscountFraction                       = null, // e.g. 0.5 for async batch
+    string   Currency                                    = "USD");
+```
+
+A reference estimator that handles tiered long-context pricing, prompt-caching (with Anthropic's 5-min / 1-hour TTL split), reasoning tokens, and the async Batch API discount:
+
+```csharp
+public sealed record Usage(
+    long InputTokens,
+    long OutputTokens,
+    long CachedInputTokens = 0,
+    long CacheWriteTokens  = 0,
+    long ReasoningTokens   = 0);
+
+public static decimal? EstimateCost(
+    Pricing? p, Usage u, bool batch = false, bool oneHourCacheTtl = false)
+{
+    if (p is null) return null;
+
+    static decimal Per(long tokens, decimal? ratePerMillion) =>
+        ratePerMillion is null ? 0m : tokens * ratePerMillion.Value / 1_000_000m;
+
+    // Split input tokens across the long-context threshold, if the model has one.
+    decimal inputCost;
+    decimal? outputRate = p.OutputCostPerMillion;
+    if (p.ContextThresholdTokens is { } t && u.InputTokens > t)
+    {
+        inputCost = Per(t, p.InputCostPerMillion)
+                  + Per(u.InputTokens - t, p.InputCostPerMillionAboveContextThreshold
+                                              ?? p.InputCostPerMillion);
+        outputRate = p.OutputCostPerMillionAboveContextThreshold ?? outputRate;
+    }
+    else
+    {
+        inputCost = Per(u.InputTokens, p.InputCostPerMillion);
+    }
+
+    var writeRate = oneHourCacheTtl
+        ? p.CacheWrite1hCostPerMillion ?? p.CacheWriteCostPerMillion
+        : p.CacheWriteCostPerMillion;
+
+    var total =
+          inputCost
+        + Per(u.CachedInputTokens, p.CachedInputCostPerMillion)
+        + Per(u.CacheWriteTokens,  writeRate)
+        + Per(u.OutputTokens,      outputRate)
+        + Per(u.ReasoningTokens,   p.ReasoningOutputCostPerMillion ?? outputRate);
+
+    if (batch && p.BatchDiscountFraction is { } fraction)
+        total *= 1m - fraction;
+
+    return total;
+}
+```
+
+Usage:
+
+```csharp
+var model = await catalog.GetModelAsync("anthropic", "claude-sonnet-4.6", ct);
+
+var cost = EstimateCost(model?.Pricing, new Usage(
+    InputTokens:       12_000,
+    OutputTokens:      800,
+    CacheWriteTokens:  4_000));
+// → cost is in model.Pricing.Currency (USD by default)
+```
+
+All pricing fields are nullable — `null` means "the upstream sources don't know this rate," not "free." Fall back to headline `InputCostPerMillion` / `OutputCostPerMillion` when a specialized rate is missing (the reference estimator above does this automatically).
+
+### DTO reference
+
+| Type           | Key fields |
+|----------------|-----------|
+| `ModelInfo`    | `Id` (`provider/model-id`), `Provider`, `ModelId`, `DisplayName?`, `Pricing?`, `Context?`, `Capabilities`, `Modality`, `Sources` (which upstream feeds contributed), `LastUpdated` |
+| `Pricing`      | see above |
+| `Context`      | `MaxInputTokens?`, `MaxOutputTokens?` |
+| `Capabilities` | `IsReasoning?`, `SupportsFunctionCalling?`, `SupportsResponseSchema?`, `SupportsVision?`, `SupportsAudioInput?` — tri-state; `null` means unknown, not unsupported |
+| `Modality`     | `Chat`, `Embedding`, `Image`, `Audio`, `Other` |
+| `ModelQuery`   | `Provider?`, `Modality?`, `IsReasoning?`, `SupportsFunctionCalling?` |
+| `CatalogMeta`  | `SnapshotAt`, `Staleness`, `SourceStates[]`, `Healthy` |
+| `SourceState`  | `Source`, `LastSuccess?`, `LastError?` |
+
+All DTOs are `sealed record` types, safe to use with `with { … }` patterns and positional deconstruction.
+
+### Versioning
+
+The DTOs are shared with the service and form the wire contract. While the package is pre-1.0, **minor-version bumps (0.x.0) are source-breaking** — new nullable fields slot into the record's positional constructor, which changes the deconstruct and `Equals` shape even though the field-access surface stays compatible.
+
+- `0.1.x` → `0.2.0`: added cache-write, 1-hour-TTL cache-write, tiered long-context, and batch-discount fields to `Pricing`.
+
 ## API reference
 
 | Endpoint | Auth | Description |
