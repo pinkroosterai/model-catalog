@@ -5,4 +5,11 @@ public sealed record Pricing(
     decimal? OutputCostPerMillion,
     decimal? CachedInputCostPerMillion,
     decimal? ReasoningOutputCostPerMillion,
-    string Currency = "USD");
+    decimal? CacheWriteCostPerMillion = null,
+    decimal? CacheWrite1hCostPerMillion = null,
+    decimal? InputCostPerMillionAboveContextThreshold = null,
+    decimal? OutputCostPerMillionAboveContextThreshold = null,
+    long? ContextThresholdTokens = null,
+    decimal? BatchDiscountFraction = null,
+    string Currency = "USD"
+);

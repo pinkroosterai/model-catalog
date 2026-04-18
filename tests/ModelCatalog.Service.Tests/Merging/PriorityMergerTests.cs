@@ -1,8 +1,8 @@
+using FluentAssertions;
 using ModelCatalog.Client.Dtos;
 using ModelCatalog.Service.Aliases;
 using ModelCatalog.Service.Merging;
 using ModelCatalog.Service.Sources;
-using FluentAssertions;
 using Xunit;
 
 namespace ModelCatalog.Service.Tests.Merging;
@@ -11,13 +11,26 @@ public class PriorityMergerTests
 {
     private static readonly DateTimeOffset T = DateTimeOffset.UnixEpoch;
 
-    private static ModelInfo Model(string source, string id,
-        decimal? input = null, long? maxIn = null, bool? funcCalling = null, string? name = null) =>
-        new(id, id.Split('/')[0], id.Split('/')[1], name,
+    private static ModelInfo Model(
+        string source,
+        string id,
+        decimal? input = null,
+        long? maxIn = null,
+        bool? funcCalling = null,
+        string? name = null
+    ) =>
+        new(
+            id,
+            id.Split('/')[0],
+            id.Split('/')[1],
+            name,
             input is null ? null : new Pricing(input, null, null, null),
             maxIn is null ? null : new Context(maxIn, null),
             new Capabilities(null, funcCalling, null, null, null),
-            Modality.Chat, new[] { source }, T);
+            Modality.Chat,
+            new[] { source },
+            T
+        );
 
     private static AliasResolver EmptyAliases() =>
         new(new Dictionary<string, Dictionary<string, string>>());
@@ -27,11 +40,21 @@ public class PriorityMergerTests
     {
         var sut = new PriorityMerger(new MergeOptions(), EmptyAliases());
 
-        var merged = sut.Merge(new[]
-        {
-            new SourceSnapshot("litellm", T, new[] { Model("litellm", "openai/gpt-5", input: 3m) }),
-            new SourceSnapshot("openrouter", T, new[] { Model("openrouter", "openai/gpt-5", input: 2.5m) }),
-        });
+        var merged = sut.Merge(
+            new[]
+            {
+                new SourceSnapshot(
+                    "litellm",
+                    T,
+                    new[] { Model("litellm", "openai/gpt-5", input: 3m) }
+                ),
+                new SourceSnapshot(
+                    "openrouter",
+                    T,
+                    new[] { Model("openrouter", "openai/gpt-5", input: 2.5m) }
+                ),
+            }
+        );
 
         merged.Single().Pricing!.InputCostPerMillion.Should().Be(2.5m);
     }
@@ -41,11 +64,21 @@ public class PriorityMergerTests
     {
         var sut = new PriorityMerger(new MergeOptions(), EmptyAliases());
 
-        var merged = sut.Merge(new[]
-        {
-            new SourceSnapshot("openrouter", T, new[] { Model("openrouter", "openai/gpt-5", maxIn: 100) }),
-            new SourceSnapshot("litellm", T, new[] { Model("litellm", "openai/gpt-5", maxIn: 400000) }),
-        });
+        var merged = sut.Merge(
+            new[]
+            {
+                new SourceSnapshot(
+                    "openrouter",
+                    T,
+                    new[] { Model("openrouter", "openai/gpt-5", maxIn: 100) }
+                ),
+                new SourceSnapshot(
+                    "litellm",
+                    T,
+                    new[] { Model("litellm", "openai/gpt-5", maxIn: 400000) }
+                ),
+            }
+        );
 
         merged.Single().Context!.MaxInputTokens.Should().Be(400000);
     }
@@ -55,13 +88,77 @@ public class PriorityMergerTests
     {
         var sut = new PriorityMerger(new MergeOptions(), EmptyAliases());
 
-        var merged = sut.Merge(new[]
-        {
-            new SourceSnapshot("litellm", T, new[] { Model("litellm", "openai/gpt-5", input: 3m) }),
-            new SourceSnapshot("openrouter", T, new[] { Model("openrouter", "openai/gpt-5", input: 2.5m) }),
-        });
+        var merged = sut.Merge(
+            new[]
+            {
+                new SourceSnapshot(
+                    "litellm",
+                    T,
+                    new[] { Model("litellm", "openai/gpt-5", input: 3m) }
+                ),
+                new SourceSnapshot(
+                    "openrouter",
+                    T,
+                    new[] { Model("openrouter", "openai/gpt-5", input: 2.5m) }
+                ),
+            }
+        );
 
         merged.Single().Sources.Should().BeEquivalentTo(new[] { "litellm", "openrouter" });
+    }
+
+    [Fact]
+    public void Merge_PricingFieldsAreFilledAcrossSources()
+    {
+        var sut = new PriorityMerger(new MergeOptions(), EmptyAliases());
+
+        var orWins = new ModelInfo(
+            "anthropic/claude",
+            "anthropic",
+            "claude",
+            null,
+            new Pricing(3m, 15m, 0.3m, null, CacheWriteCostPerMillion: 3.75m),
+            null,
+            new Capabilities(null, null, null, null, null),
+            Modality.Chat,
+            new[] { "openrouter" },
+            T
+        );
+
+        var litellmExtras = new ModelInfo(
+            "anthropic/claude",
+            "anthropic",
+            "claude",
+            null,
+            new Pricing(
+                3m,
+                15m,
+                0.3m,
+                null,
+                CacheWriteCostPerMillion: 3.75m,
+                CacheWrite1hCostPerMillion: 6m,
+                BatchDiscountFraction: 0.5m
+            ),
+            null,
+            new Capabilities(null, null, null, null, null),
+            Modality.Chat,
+            new[] { "litellm" },
+            T
+        );
+
+        var merged = sut.Merge(
+            new[]
+            {
+                new SourceSnapshot("openrouter", T, new[] { orWins }),
+                new SourceSnapshot("litellm", T, new[] { litellmExtras }),
+            }
+        );
+
+        var px = merged.Single().Pricing!;
+        px.InputCostPerMillion.Should().Be(3m);
+        px.CacheWriteCostPerMillion.Should().Be(3.75m);
+        px.CacheWrite1hCostPerMillion.Should().Be(6m);
+        px.BatchDiscountFraction.Should().Be(0.5m);
     }
 
     [Fact]
@@ -69,11 +166,21 @@ public class PriorityMergerTests
     {
         var sut = new PriorityMerger(new MergeOptions(), EmptyAliases());
 
-        var merged = sut.Merge(new[]
-        {
-            new SourceSnapshot("litellm", T, new[] { Model("litellm", "openai/gpt-5", name: "litellm-name") }),
-            new SourceSnapshot("modelsdev", T, new[] { Model("modelsdev", "openai/gpt-5", name: "GPT-5") }),
-        });
+        var merged = sut.Merge(
+            new[]
+            {
+                new SourceSnapshot(
+                    "litellm",
+                    T,
+                    new[] { Model("litellm", "openai/gpt-5", name: "litellm-name") }
+                ),
+                new SourceSnapshot(
+                    "modelsdev",
+                    T,
+                    new[] { Model("modelsdev", "openai/gpt-5", name: "GPT-5") }
+                ),
+            }
+        );
 
         merged.Single().DisplayName.Should().Be("GPT-5");
     }

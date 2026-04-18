@@ -11,7 +11,7 @@
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageTags>llm;openai;openrouter;litellm;pricing;catalog</PackageTags>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
-    <Version>0.1.0</Version>
+    <Version>0.2.0</Version>
     <NoWarn>$(NoWarn);CS1591;MA0048</NoWarn>
   </PropertyGroup>
   <ItemGroup>

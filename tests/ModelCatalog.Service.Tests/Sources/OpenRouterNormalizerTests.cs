@@ -1,6 +1,6 @@
+using FluentAssertions;
 using ModelCatalog.Client.Dtos;
 using ModelCatalog.Service.Sources;
-using FluentAssertions;
 using Xunit;
 
 namespace ModelCatalog.Service.Tests.Sources;
@@ -27,5 +27,7 @@ public class OpenRouterNormalizerTests
 
         var sonnet = snapshot.Models.Single(m => m.Id == "anthropic/claude-sonnet-4.6");
         sonnet.Capabilities.IsReasoning.Should().BeTrue();
+        sonnet.Pricing!.CachedInputCostPerMillion.Should().Be(0.3m);
+        sonnet.Pricing.CacheWriteCostPerMillion.Should().Be(3.75m);
     }
 }
