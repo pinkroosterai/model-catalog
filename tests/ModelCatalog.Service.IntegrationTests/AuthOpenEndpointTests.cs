@@ -1,5 +1,5 @@
-using ModelCatalog.Service.IntegrationTests.Fakes;
 using FluentAssertions;
+using ModelCatalog.Service.IntegrationTests.Fakes;
 using Xunit;
 
 namespace ModelCatalog.Service.IntegrationTests;
@@ -11,8 +11,12 @@ public class AuthOpenEndpointTests
     public async Task ModelsMetaSources_AreOpen_WithoutApiKey()
     {
         using var factory = new TestAppFactory();
-        factory.Fakes.Add(new FakeSource("litellm",
-            _ => Task.FromResult(TestAppFactory.Snap("litellm", ("openai/gpt-5", 1m, 1)))));
+        factory.Fakes.Add(
+            new FakeSource(
+                "litellm",
+                _ => Task.FromResult(TestAppFactory.Snap("litellm", ("openai/gpt-5", 1m, 1)))
+            )
+        );
 
         var c = factory.CreateClient();
         c.DefaultRequestHeaders.Add("X-Api-Key", factory.ApiKey);

@@ -34,6 +34,7 @@ public class AuthTests : IClassFixture<TestAppFactory>
     public async Task Healthz_IsOpen()
     {
         var resp = await _factory.CreateClient().GetAsync(new Uri("/healthz", UriKind.Relative));
-        resp.StatusCode.Should().BeOneOf(System.Net.HttpStatusCode.OK, System.Net.HttpStatusCode.ServiceUnavailable);
+        resp.StatusCode.Should()
+            .BeOneOf(System.Net.HttpStatusCode.OK, System.Net.HttpStatusCode.ServiceUnavailable);
     }
 }

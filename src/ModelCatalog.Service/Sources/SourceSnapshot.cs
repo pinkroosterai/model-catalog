@@ -5,4 +5,5 @@ namespace ModelCatalog.Service.Sources;
 public sealed record SourceSnapshot(
     string SourceName,
     DateTimeOffset FetchedAt,
-    IReadOnlyList<ModelInfo> Models);
+    IReadOnlyList<ModelInfo> Models
+);

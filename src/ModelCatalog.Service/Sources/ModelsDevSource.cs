@@ -1,7 +1,10 @@
 namespace ModelCatalog.Service.Sources;
 
-public sealed class ModelsDevSource(HttpClient http, ModelsDevNormalizer normalizer, TimeProvider clock)
-    : ISource
+public sealed class ModelsDevSource(
+    HttpClient http,
+    ModelsDevNormalizer normalizer,
+    TimeProvider clock
+) : ISource
 {
     private static readonly Uri ApiPath = new("api.json", UriKind.Relative);
 

@@ -10,4 +10,5 @@ public sealed record ModelInfo(
     Capabilities Capabilities,
     Modality Modality,
     IReadOnlyList<string> Sources,
-    DateTimeOffset LastUpdated);
+    DateTimeOffset LastUpdated
+);

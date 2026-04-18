@@ -2,10 +2,10 @@ using System.Globalization;
 using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
-using ModelCatalog.Client.Dtos;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using ModelCatalog.Client.Dtos;
 
 namespace ModelCatalog.Client;
 
@@ -16,13 +16,17 @@ public sealed class ModelCatalogClient(
     IDistributedCache cache,
     IOptions<ModelCatalogClientOptions> options,
     TimeProvider clock,
-    ILogger<ModelCatalogClient> logger) : IModelCatalogClient, IDisposable
+    ILogger<ModelCatalogClient> logger
+) : IModelCatalogClient, IDisposable
 {
     public void Dispose() => _lock.Dispose();
 
     private static readonly Action<ILogger, string, Exception?> LogStale =
-        LoggerMessage.Define<string>(LogLevel.Warning, new EventId(1, "StaleServed"),
-            "Serving stale cache for {Url}");
+        LoggerMessage.Define<string>(
+            LogLevel.Warning,
+            new EventId(1, "StaleServed"),
+            "Serving stale cache for {Url}"
+        );
 
     private readonly ModelCatalogClientOptions _opts = options.Value;
     private readonly SemaphoreSlim _lock = new(1, 1);
@@ -34,53 +38,90 @@ public sealed class ModelCatalogClient(
         return GetModelAsync(parts[0], parts[1], ct);
     }
 
-    public Task<ModelInfo?> GetModelAsync(string provider, string modelId, CancellationToken ct = default) =>
+    public Task<ModelInfo?> GetModelAsync(
+        string provider,
+        string modelId,
+        CancellationToken ct = default
+    ) =>
         FetchWithCacheAsync<ModelInfo?>(
             cacheKey: $"modelregistry:v1:model:{provider}/{modelId}",
             url: $"v1/models/{provider}/{modelId}",
-            allow404: true, ct);
+            allow404: true,
+            ct
+        );
 
-    public async Task<IReadOnlyList<ModelInfo>> ListModelsAsync(ModelQuery? query = null, CancellationToken ct = default)
+    public async Task<IReadOnlyList<ModelInfo>> ListModelsAsync(
+        ModelQuery? query = null,
+        CancellationToken ct = default
+    )
     {
         var qs = query is null ? string.Empty : BuildQuery(query);
         var key = $"modelregistry:v1:list:{StableHash(qs)}";
-        var res = await FetchWithCacheAsync<IReadOnlyList<ModelInfo>>(key, "v1/models" + qs, allow404: false, ct).ConfigureAwait(false);
+        var res = await FetchWithCacheAsync<IReadOnlyList<ModelInfo>>(
+                key,
+                "v1/models" + qs,
+                allow404: false,
+                ct
+            )
+            .ConfigureAwait(false);
         return res ?? [];
     }
 
     public async Task<CatalogMeta> GetMetaAsync(CancellationToken ct = default) =>
-        (await FetchWithCacheAsync<CatalogMeta>("modelregistry:v1:meta", "v1/meta", allow404: false, ct).ConfigureAwait(false))!;
+        (
+            await FetchWithCacheAsync<CatalogMeta>(
+                    "modelregistry:v1:meta",
+                    "v1/meta",
+                    allow404: false,
+                    ct
+                )
+                .ConfigureAwait(false)
+        )!;
 
-    private async Task<T?> FetchWithCacheAsync<T>(string cacheKey, string url, bool allow404, CancellationToken ct)
+    private async Task<T?> FetchWithCacheAsync<T>(
+        string cacheKey,
+        string url,
+        bool allow404,
+        CancellationToken ct
+    )
     {
-        var fresh = await TryReadCacheAsync<T>(cacheKey, mustBeFresh: true, ct).ConfigureAwait(false);
-        if (fresh is { } f) return f.Value;
+        var fresh = await TryReadCacheAsync<T>(cacheKey, mustBeFresh: true, ct)
+            .ConfigureAwait(false);
+        if (fresh is { } f)
+            return f.Value;
 
         await _lock.WaitAsync(ct).ConfigureAwait(false);
         try
         {
-            fresh = await TryReadCacheAsync<T>(cacheKey, mustBeFresh: true, ct).ConfigureAwait(false);
-            if (fresh is { } f2) return f2.Value;
+            fresh = await TryReadCacheAsync<T>(cacheKey, mustBeFresh: true, ct)
+                .ConfigureAwait(false);
+            if (fresh is { } f2)
+                return f2.Value;
 
             try
             {
                 using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
                 cts.CancelAfter(_opts.RequestTimeout);
-                var resp = await http.GetAsync(new Uri(url, UriKind.Relative), cts.Token).ConfigureAwait(false);
+                var resp = await http.GetAsync(new Uri(url, UriKind.Relative), cts.Token)
+                    .ConfigureAwait(false);
                 if (allow404 && resp.StatusCode == System.Net.HttpStatusCode.NotFound)
                 {
                     await WriteCacheAsync<T>(cacheKey, default!, ct).ConfigureAwait(false);
                     return default;
                 }
                 resp.EnsureSuccessStatusCode();
-                var dto = await resp.Content.ReadFromJsonAsync<T>(cancellationToken: ct).ConfigureAwait(false);
+                var dto = await resp
+                    .Content.ReadFromJsonAsync<T>(cancellationToken: ct)
+                    .ConfigureAwait(false);
                 await WriteCacheAsync(cacheKey, dto!, ct).ConfigureAwait(false);
                 return dto;
             }
 #pragma warning disable CA1031
-            catch (Exception ex) when (ex is not OperationCanceledException || !ct.IsCancellationRequested)
+            catch (Exception ex)
+                when (ex is not OperationCanceledException || !ct.IsCancellationRequested)
             {
-                var stale = await TryReadCacheAsync<T>(cacheKey, mustBeFresh: false, ct).ConfigureAwait(false);
+                var stale = await TryReadCacheAsync<T>(cacheKey, mustBeFresh: false, ct)
+                    .ConfigureAwait(false);
                 if (stale is { } sv)
                 {
                     LogStale(logger, url, ex);
@@ -90,18 +131,29 @@ public sealed class ModelCatalogClient(
             }
 #pragma warning restore CA1031
         }
-        finally { _lock.Release(); }
+        finally
+        {
+            _lock.Release();
+        }
     }
 
-    private async Task<(T? Value, bool Hit)?> TryReadCacheAsync<T>(string key, bool mustBeFresh, CancellationToken ct)
+    private async Task<(T? Value, bool Hit)?> TryReadCacheAsync<T>(
+        string key,
+        bool mustBeFresh,
+        CancellationToken ct
+    )
     {
         var raw = await cache.GetStringAsync(key, ct).ConfigureAwait(false);
-        if (raw is null) return null;
+        if (raw is null)
+            return null;
         var entry = JsonSerializer.Deserialize<CachedEntry<T>>(raw);
-        if (entry is null) return null;
+        if (entry is null)
+            return null;
         var age = clock.GetUtcNow() - entry.StoredAt;
-        if (mustBeFresh && age > _opts.CacheTtl) return null;
-        if (!mustBeFresh && age > _opts.CacheTtl + _opts.StaleGrace) return null;
+        if (mustBeFresh && age > _opts.CacheTtl)
+            return null;
+        if (!mustBeFresh && age > _opts.CacheTtl + _opts.StaleGrace)
+            return null;
         return (entry.Value, true);
     }
 
@@ -109,21 +161,36 @@ public sealed class ModelCatalogClient(
     {
         var entry = new CachedEntry<T>(value, clock.GetUtcNow());
         var json = JsonSerializer.Serialize(entry);
-        await cache.SetStringAsync(key, json,
-            new DistributedCacheEntryOptions
-            {
-                AbsoluteExpirationRelativeToNow = _opts.CacheTtl + _opts.StaleGrace
-            }, ct).ConfigureAwait(false);
+        await cache
+            .SetStringAsync(
+                key,
+                json,
+                new DistributedCacheEntryOptions
+                {
+                    AbsoluteExpirationRelativeToNow = _opts.CacheTtl + _opts.StaleGrace,
+                },
+                ct
+            )
+            .ConfigureAwait(false);
     }
 
     private static string BuildQuery(ModelQuery q)
     {
         var sb = new StringBuilder("?");
-        if (q.Provider is not null) sb.Append(CultureInfo.InvariantCulture, $"provider={Uri.EscapeDataString(q.Provider)}&");
-        if (q.Modality is not null) sb.Append(CultureInfo.InvariantCulture, $"modality={q.Modality}&");
-        if (q.IsReasoning is not null) sb.Append(CultureInfo.InvariantCulture, $"isReasoning={q.IsReasoning}&");
+        if (q.Provider is not null)
+            sb.Append(
+                CultureInfo.InvariantCulture,
+                $"provider={Uri.EscapeDataString(q.Provider)}&"
+            );
+        if (q.Modality is not null)
+            sb.Append(CultureInfo.InvariantCulture, $"modality={q.Modality}&");
+        if (q.IsReasoning is not null)
+            sb.Append(CultureInfo.InvariantCulture, $"isReasoning={q.IsReasoning}&");
         if (q.SupportsFunctionCalling is not null)
-            sb.Append(CultureInfo.InvariantCulture, $"supportsFunctionCalling={q.SupportsFunctionCalling}&");
+            sb.Append(
+                CultureInfo.InvariantCulture,
+                $"supportsFunctionCalling={q.SupportsFunctionCalling}&"
+            );
         return sb.Length == 1 ? string.Empty : sb.ToString().TrimEnd('&');
     }
 
@@ -132,7 +199,11 @@ public sealed class ModelCatalogClient(
         unchecked
         {
             ulong h = 14695981039346656037UL;
-            foreach (var c in s) { h ^= c; h *= 1099511628211UL; }
+            foreach (var c in s)
+            {
+                h ^= c;
+                h *= 1099511628211UL;
+            }
             return h.ToString("x", CultureInfo.InvariantCulture);
         }
     }

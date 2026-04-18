@@ -1,5 +1,5 @@
-using ModelCatalog.Service.IntegrationTests.Fakes;
 using FluentAssertions;
+using ModelCatalog.Service.IntegrationTests.Fakes;
 using Xunit;
 
 namespace ModelCatalog.Service.IntegrationTests;
@@ -10,11 +10,16 @@ public class ColdStartTests
     public async Task ModelsEndpoint_Returns503BeforeFirstSync()
     {
         using var factory = new TestAppFactory();
-        factory.Fakes.Add(new FakeSource("litellm", async ct =>
-        {
-            await Task.Delay(Timeout.Infinite, ct);
-            return TestAppFactory.Snap("litellm");
-        }));
+        factory.Fakes.Add(
+            new FakeSource(
+                "litellm",
+                async ct =>
+                {
+                    await Task.Delay(Timeout.Infinite, ct);
+                    return TestAppFactory.Snap("litellm");
+                }
+            )
+        );
 
         var c = factory.CreateClient();
         c.DefaultRequestHeaders.Add("X-Api-Key", factory.ApiKey);

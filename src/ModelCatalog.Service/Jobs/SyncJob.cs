@@ -16,7 +16,8 @@ public sealed class SyncJob(SyncPipeline pipeline) : IJob
     public async Task Execute(IJobExecutionContext context)
     {
         ArgumentNullException.ThrowIfNull(context);
-        if (!TryBeginRun()) return;
+        if (!TryBeginRun())
+            return;
         try
         {
             await pipeline.RunAsync(context.CancellationToken).ConfigureAwait(false);

@@ -7,4 +7,5 @@ public sealed record NormalizedSnapshot(
     DateTimeOffset FetchedAt,
     IReadOnlyList<ModelInfo> Models,
     IReadOnlyList<SourceState> SourceStates,
-    IReadOnlyList<SourceSnapshot> RawSources);
+    IReadOnlyList<SourceSnapshot> RawSources
+);

@@ -5,4 +5,5 @@ public sealed record Capabilities(
     bool? SupportsFunctionCalling,
     bool? SupportsResponseSchema,
     bool? SupportsVision,
-    bool? SupportsAudioInput);
+    bool? SupportsAudioInput
+);

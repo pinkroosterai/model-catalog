@@ -1,9 +1,9 @@
+using System.Net.Http.Json;
+using FluentAssertions;
+using Microsoft.Extensions.DependencyInjection;
 using ModelCatalog.Client.Dtos;
 using ModelCatalog.Service.IntegrationTests.Fakes;
 using ModelCatalog.Service.Jobs;
-using FluentAssertions;
-using Microsoft.Extensions.DependencyInjection;
-using System.Net.Http.Json;
 using Xunit;
 
 namespace ModelCatalog.Service.IntegrationTests;
@@ -17,12 +17,19 @@ public class ModelEndpointsTests : IClassFixture<TestAppFactory>
         ArgumentNullException.ThrowIfNull(factory);
         _factory = factory;
         factory.Fakes.Clear();
-        factory.Fakes.Add(new FakeSource("litellm",
-            _ => Task.FromResult(TestAppFactory.Snap("litellm",
-                ("openai/gpt-5", 3m, 400000)))));
-        factory.Fakes.Add(new FakeSource("openrouter",
-            _ => Task.FromResult(TestAppFactory.Snap("openrouter",
-                ("openai/gpt-5", 2.5m, null)))));
+        factory.Fakes.Add(
+            new FakeSource(
+                "litellm",
+                _ => Task.FromResult(TestAppFactory.Snap("litellm", ("openai/gpt-5", 3m, 400000)))
+            )
+        );
+        factory.Fakes.Add(
+            new FakeSource(
+                "openrouter",
+                _ =>
+                    Task.FromResult(TestAppFactory.Snap("openrouter", ("openai/gpt-5", 2.5m, null)))
+            )
+        );
     }
 
     [Fact]

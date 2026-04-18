@@ -4,9 +4,7 @@ public sealed record CatalogMeta(
     DateTimeOffset SnapshotAt,
     TimeSpan Staleness,
     IReadOnlyList<SourceState> SourceStates,
-    bool Healthy);
+    bool Healthy
+);
 
-public sealed record SourceState(
-    string Source,
-    DateTimeOffset? LastSuccess,
-    string? LastError);
+public sealed record SourceState(string Source, DateTimeOffset? LastSuccess, string? LastError);

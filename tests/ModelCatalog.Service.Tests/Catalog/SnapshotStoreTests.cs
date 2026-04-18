@@ -1,7 +1,7 @@
+using FluentAssertions;
 using ModelCatalog.Client.Dtos;
 using ModelCatalog.Service.Catalog;
 using ModelCatalog.Service.Sources;
-using FluentAssertions;
 using Xunit;
 
 namespace ModelCatalog.Service.Tests.Catalog;
@@ -9,14 +9,26 @@ namespace ModelCatalog.Service.Tests.Catalog;
 public class SnapshotStoreTests
 {
     private static NormalizedSnapshot MakeSnap(string id, DateTimeOffset t) =>
-        new(t,
+        new(
+            t,
             new[]
             {
-                new ModelInfo(id, id.Split('/')[0], id.Split('/')[1], null, null, null,
-                    new Capabilities(null, null, null, null, null), Modality.Chat, new[] { "litellm" }, t)
+                new ModelInfo(
+                    id,
+                    id.Split('/')[0],
+                    id.Split('/')[1],
+                    null,
+                    null,
+                    null,
+                    new Capabilities(null, null, null, null, null),
+                    Modality.Chat,
+                    new[] { "litellm" },
+                    t
+                ),
             },
             new SourceState[] { new("litellm", t, null) },
-            Array.Empty<SourceSnapshot>());
+            Array.Empty<SourceSnapshot>()
+        );
 
     [Fact]
     public async Task SwapAndGet_RoundtripsViaDisk()
@@ -38,7 +50,8 @@ public class SnapshotStoreTests
         }
         finally
         {
-            if (Directory.Exists(dir)) Directory.Delete(dir, recursive: true);
+            if (Directory.Exists(dir))
+                Directory.Delete(dir, recursive: true);
         }
     }
 }

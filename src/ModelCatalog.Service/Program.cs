@@ -1,4 +1,5 @@
 #pragma warning disable CA1515, S1118, S6966, MA0004, CA1031, CA2000, CA1305, CA1849
+using Microsoft.Extensions.Options;
 using ModelCatalog.Service.Aliases;
 using ModelCatalog.Service.Auth;
 using ModelCatalog.Service.Catalog;
@@ -6,7 +7,6 @@ using ModelCatalog.Service.Endpoints;
 using ModelCatalog.Service.Jobs;
 using ModelCatalog.Service.Merging;
 using ModelCatalog.Service.Sources;
-using Microsoft.Extensions.Options;
 using Polly;
 using Polly.Extensions.Http;
 using Prometheus;
@@ -43,21 +43,35 @@ builder.Services.AddSingleton<SyncPipeline>();
 var resiliencePolicy = HttpPolicyExtensions
     .HandleTransientHttpError()
     .WaitAndRetryAsync(3, a => TimeSpan.FromSeconds(Math.Pow(4, a - 1)));
-var breaker = HttpPolicyExtensions.HandleTransientHttpError()
+var breaker = HttpPolicyExtensions
+    .HandleTransientHttpError()
     .CircuitBreakerAsync(5, TimeSpan.FromMinutes(5));
 
-builder.Services.AddHttpClient<LiteLlmSource>(c =>
-    c.BaseAddress = new Uri(cfg["ModelRegistry:Sources:LiteLlm:Url"]
-        ?? "https://raw.githubusercontent.com/BerriAI/litellm/main/model_prices_and_context_window.json"))
-    .AddPolicyHandler(resiliencePolicy).AddPolicyHandler(breaker);
+builder
+    .Services.AddHttpClient<LiteLlmSource>(c =>
+        c.BaseAddress = new Uri(
+            cfg["ModelRegistry:Sources:LiteLlm:Url"]
+                ?? "https://raw.githubusercontent.com/BerriAI/litellm/main/model_prices_and_context_window.json"
+        )
+    )
+    .AddPolicyHandler(resiliencePolicy)
+    .AddPolicyHandler(breaker);
 
-builder.Services.AddHttpClient<OpenRouterSource>(c =>
-    c.BaseAddress = new Uri(cfg["ModelRegistry:Sources:OpenRouter:Url"] ?? "https://openrouter.ai/api/v1/"))
-    .AddPolicyHandler(resiliencePolicy).AddPolicyHandler(breaker);
+builder
+    .Services.AddHttpClient<OpenRouterSource>(c =>
+        c.BaseAddress = new Uri(
+            cfg["ModelRegistry:Sources:OpenRouter:Url"] ?? "https://openrouter.ai/api/v1/"
+        )
+    )
+    .AddPolicyHandler(resiliencePolicy)
+    .AddPolicyHandler(breaker);
 
-builder.Services.AddHttpClient<ModelsDevSource>(c =>
-    c.BaseAddress = new Uri(cfg["ModelRegistry:Sources:ModelsDev:Url"] ?? "https://models.dev/"))
-    .AddPolicyHandler(resiliencePolicy).AddPolicyHandler(breaker);
+builder
+    .Services.AddHttpClient<ModelsDevSource>(c =>
+        c.BaseAddress = new Uri(cfg["ModelRegistry:Sources:ModelsDev:Url"] ?? "https://models.dev/")
+    )
+    .AddPolicyHandler(resiliencePolicy)
+    .AddPolicyHandler(breaker);
 
 builder.Services.AddSingleton<ISource>(sp => sp.GetRequiredService<LiteLlmSource>());
 builder.Services.AddSingleton<ISource>(sp => sp.GetRequiredService<OpenRouterSource>());
@@ -71,8 +85,11 @@ builder.Services.AddQuartz(q =>
     {
         q.AddTrigger(t => t.ForJob(jobKey).WithIdentity("sync-startup").StartNow());
     }
-    q.AddTrigger(t => t.ForJob(jobKey).WithIdentity("sync-daily")
-        .WithCronSchedule(cfg["ModelRegistry:SyncCron"] ?? "0 0 1 * * ?"));
+    q.AddTrigger(t =>
+        t.ForJob(jobKey)
+            .WithIdentity("sync-daily")
+            .WithCronSchedule(cfg["ModelRegistry:SyncCron"] ?? "0 0 1 * * ?")
+    );
 });
 builder.Services.AddQuartzHostedService(opt => opt.WaitForJobsToComplete = true);
 
@@ -93,20 +110,29 @@ v1.MapSourceEndpoints(app.Services.GetRequiredService<SnapshotStore>());
 v1.MapMetaEndpoints(
     app.Services.GetRequiredService<SnapshotStore>(),
     app.Services.GetRequiredService<TimeProvider>(),
-    TimeSpan.FromHours(staleHours));
+    TimeSpan.FromHours(staleHours)
+);
 v1.MapRefreshEndpoints(
     app.Services.GetRequiredService<SyncPipeline>(),
-    app.Services.GetRequiredService<IOptionsMonitor<ApiKeyOptions>>());
+    app.Services.GetRequiredService<IOptionsMonitor<ApiKeyOptions>>()
+);
 
-app.MapGet("/healthz", (SnapshotStore store, TimeProvider clock) =>
-{
-    var snap = store.Current;
-    if (snap is null) return Results.Problem(statusCode: 503, detail: "Snapshot unavailable");
-    var age = clock.GetUtcNow() - snap.FetchedAt;
-    return age < TimeSpan.FromHours(staleHours)
-        ? Results.Ok(new { status = "healthy", snapshotAgeHours = age.TotalHours })
-        : Results.Json(new { status = "degraded", snapshotAgeHours = age.TotalHours }, statusCode: 503);
-});
+app.MapGet(
+    "/healthz",
+    (SnapshotStore store, TimeProvider clock) =>
+    {
+        var snap = store.Current;
+        if (snap is null)
+            return Results.Problem(statusCode: 503, detail: "Snapshot unavailable");
+        var age = clock.GetUtcNow() - snap.FetchedAt;
+        return age < TimeSpan.FromHours(staleHours)
+            ? Results.Ok(new { status = "healthy", snapshotAgeHours = age.TotalHours })
+            : Results.Json(
+                new { status = "degraded", snapshotAgeHours = age.TotalHours },
+                statusCode: 503
+            );
+    }
+);
 
 app.Run();
 

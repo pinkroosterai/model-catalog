@@ -15,15 +15,20 @@ public sealed class SnapshotStore(string snapshotPath)
         var tmp = snapshotPath + ".tmp";
         var fs = File.Create(tmp);
         await using (fs.ConfigureAwait(false))
-            await JsonSerializer.SerializeAsync(fs, snapshot, cancellationToken: ct).ConfigureAwait(false);
+            await JsonSerializer
+                .SerializeAsync(fs, snapshot, cancellationToken: ct)
+                .ConfigureAwait(false);
         File.Move(tmp, snapshotPath, overwrite: true);
     }
 
     public async Task TryLoadFromDiskAsync(CancellationToken ct)
     {
-        if (!File.Exists(snapshotPath)) return;
+        if (!File.Exists(snapshotPath))
+            return;
         var fs = File.OpenRead(snapshotPath);
         await using var _ = fs.ConfigureAwait(false);
-        _current = await JsonSerializer.DeserializeAsync<NormalizedSnapshot>(fs, cancellationToken: ct).ConfigureAwait(false);
+        _current = await JsonSerializer
+            .DeserializeAsync<NormalizedSnapshot>(fs, cancellationToken: ct)
+            .ConfigureAwait(false);
     }
 }

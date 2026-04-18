@@ -1,7 +1,10 @@
 namespace ModelCatalog.Service.Sources;
 
-public sealed class OpenRouterSource(HttpClient http, OpenRouterNormalizer normalizer, TimeProvider clock)
-    : ISource
+public sealed class OpenRouterSource(
+    HttpClient http,
+    OpenRouterNormalizer normalizer,
+    TimeProvider clock
+) : ISource
 {
     private static readonly Uri ModelsPath = new("models", UriKind.Relative);
 
