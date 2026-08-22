@@ -596,3 +596,24 @@ this work, tripped by the deploy's own restarts — incidental confirmation that
 alerting path was already live.
 
 Source: OpenObserve API and `ntfy.sh` topic poll on this host, 2026-08-22.
+
+## Close: security review of the change range, 2026-08-22
+
+The `/security-review` harness diffs a feature branch against `main` and this work *is* on `main`,
+so it received an empty diff and had nothing to analyse. Reviewed inline over `a5c6b8a..HEAD`
+instead. Three pieces of genuinely new attack surface, none of them a finding:
+
+- **`RequestIdMiddleware` reflects an attacker-controlled header.** Tested rather than reasoned
+  about: `X-Request-Id: abc\r\nX-Injected: pwned` through Caddy comes back as `x-request-id: abc`
+  with no injected header, and the response is HTTP/2, where response splitting is structurally
+  impossible. A 4000-character value is reflected and answered 200. The value also reaches the
+  logs, but it is written through `Utf8JsonWriter`, which escapes it.
+- **`/health` exposes each feed's `lastError`.** Not new surface: `/v1/meta` already returned the
+  same `SourceStates` before this work, and it is public too. The strings are exception messages
+  from fetches of three documented public URLs.
+- **The refresh auth path changed** — and the change closes a hole rather than opening one; see
+  `§ Phase 3 found` above. The comparison is still `string.Equals` rather than constant-time,
+  which is pre-existing and not worth a finding on an endpoint that is 404'd at the edge.
+
+Not examined here because they are excluded from that review's scope: secrets at rest (`.env` at
+mode 600), and the absence of rate limiting, which is a recorded decision in the spec.

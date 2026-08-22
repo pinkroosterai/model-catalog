@@ -310,3 +310,43 @@ is the only writer.
   public credential outside the mail stack on an endpoint with no ban-on-failure behind it. Also
   ruled out dropping the key entirely, which would leave no way to force a refresh short of a
   restart. Costs the operator a shell.
+
+### 2026-08-22 — what execution changed
+
+Appended by `/execute-plan`. The sections above are left as they were written; these are the
+places the build overturned them.
+
+- **The snapshot is on a named volume, not the bind mount `How it works` describes.** That line
+  was drafted prose rather than a logged decision. The image runs as uid 1654 and a
+  Docker-created bind mount is root-owned, so it would have been unwritable — and because
+  `SnapshotStore` assigns the in-memory snapshot before it opens the file, the service would have
+  served a correct catalog, persisted nothing, and revealed it only at the next restart by coming
+  up empty. Confirmed on the host after deploying: `/app/data` is `1654 1654` with a 16 MB
+  snapshot in it. Ruled out: a bind mount plus a documented `install -d -o 1654`, which fails
+  silently the first time somebody forgets it.
+- **`/health` was added beside `/healthz` rather than replacing it, and the `[THIN]` note on that
+  paragraph is answered by a fact the spec did not have.** This project shipped in April: tags
+  `v0.1.0` and `v0.2.0`, a **public** `ghcr.io/pinkroosterai/model-catalog` package, and
+  `ModelCatalog.Client` 0.1.0/0.2.0 on nuget.org whose README tells people to run that image. So
+  `/healthz` is a live surface with possible self-hosters, not a name nobody depends on. The two
+  now answer different questions — `/healthz` is "should you trust this data" (503 when stale),
+  `/health` is "is this container serving" (503 only with no snapshot) — and the container probe
+  uses the second.
+- **The old image name is still published rather than retired.** Same reason. CI pushes
+  `modelcatalog` (canonical, what the estate pulls) and `model-catalog` (kept fed) from one build.
+  Ruled out: deleting it, which breaks published instructions; and freezing it, which strands
+  self-hosters on April code without saying so.
+- **Success criterion 9 could not be checked as worded.** "A snapshot age older than the process
+  uptime" is invisible on a normal restart, because `RunSyncOnStartup` defaults to true and the
+  sync finishes in about a second, making `FetchedAt` newer than the process either way. The
+  property is real and was proven with the startup sync disabled: snapshot age 24s against 2.5s
+  of uptime, 51 anthropic models served, zero sync runs. A future revision of this spec should
+  reword the criterion rather than the behaviour.
+- **`Qualities and constraints` gained a fact it was `[THIN]` for.** A cold sync measured 1.17s
+  on this host, bounded near 30s in the worst case by the per-source timeout. That is what sets
+  the healthcheck `start_period`, and the section had no measured figure when it was written.
+
+Not overturned, and worth saying: no consumer has still been confirmed. `Who it is for` remains
+`[THIN]` on exactly the point it was drafted `[THIN]` on — the estate-internal path is built and
+verified, but nothing yet calls it.
+

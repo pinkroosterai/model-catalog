@@ -3,7 +3,7 @@
 **Goal** — Run ModelCatalog as the `modelcatalog` stack behind Caddy on
 `models.pinkrooster.nl`, built to the estate's operational contract, until all twelve of the
 spec's success criteria pass and the stale-feed alert has fired once on purpose.
-**Status** — phase 4 in progress
+**Status** — done
 **Research** — `research.md`
 **Spec** — `spec.md` (status `buildable`, no blocking marks)
 
