@@ -220,12 +220,12 @@ The DTOs are shared with the service and form the wire contract. While the packa
 |---|---|---|
 | `GET /health` | open | Reports each upstream feed by name, with its last success and last error. 503 only when there is no snapshot to serve |
 | `GET /healthz` | open | Liveness; returns staleness of last sync. 503 once the snapshot is past the stale threshold — a different question from `/health`: "should you trust this data", not "is this container serving" |
-| `GET /metrics` | open | Prometheus metrics |
+| `GET /metrics` | open | Prometheus metrics. **Not exposed on `models.pinkrooster.nl`** — 404 at the edge; available when self-hosting |
 | `GET /v1/models` | open | All models, optionally filtered by `?provider=` `?modality=` |
 | `GET /v1/models/{provider}/{modelId}` | open | Single model |
 | `GET /v1/meta` | open | Last fetch time + per-source health |
 | `GET /v1/sources` | open | Per-source state |
-| `POST /v1/refresh` | api-key | Operator-triggered manual sync |
+| `POST /v1/refresh` | api-key | Operator-triggered manual sync. **Not exposed on `models.pinkrooster.nl`** — 404 at the edge; available when self-hosting |
 
 ## Self-hosting
 
