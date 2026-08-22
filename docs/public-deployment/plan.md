@@ -172,7 +172,7 @@ from another container on `edge`.
 
 ## Phase 4 — Prove the alerting, and make the records true
 
-**Status** — not started
+**Status** — done
 **Rests on**
 - Phase 3 done, with all three feeds publishing `feed_last_success_timestamp_seconds` and
   reaching OpenObserve.
@@ -188,17 +188,17 @@ from another container on `edge`.
   host — so it is raised, not decided here. Answer goes under `research.md § Still open`.
 
 **Tasks**
-- [ ] Confirm the three feeds are actually matched by `feed-stale-daily` rather than assumed to
+- [x] Confirm the three feeds are actually matched by `feed-stale-daily` rather than assumed to
       be — the rule matches by exclusion, so a feed name colliding with `FAST_FEEDS` or
       `WEEKLY_FEEDS` would silently land in the wrong window.
-- [ ] Fire the stale-feed alert once on purpose and confirm the ntfy notification arrives —
+- [x] Fire the stale-feed alert once on purpose and confirm the ntfy notification arrives —
       §7 is explicit that a rule which has never fired is indistinguishable from one that
       cannot, and this estate has shipped an alert that could never fire before.
-- [ ] Record the §4 caching deviation as a §9 row in
+- [x] Record the §4 caching deviation as a §9 row in
       `~/ArchitectureRedesign/docs/open-questions.md` — what was done, why the rule blocked it,
       and what it costs either way; the reasoning and the ruled-out alternative are in
       `spec.md § Decisions`.
-- [ ] Correct the README's deployment claims — it advertises `models.pinkrooster.nl` as live
+- [x] Correct the README's deployment claims — it advertises `models.pinkrooster.nl` as live
       (true only after Phase 3) and names `ghcr.io/pinkroosterai/model-catalog:latest` for
       self-hosting, which Phase 2 stops publishing.
 
@@ -324,3 +324,25 @@ unwritable by this image's user.
 **2026-08-22 — Phase 3: `start_period` set from measurement.** A cold sync took 1.17s; the worst
 case is bounded near 30s by the per-source timeout. 120s was a guess made before anything ran and
 is now 60s.
+
+**2026-08-22 — Phase 4 done.** The three feeds are in `feed-stale-daily`'s scope, checked by
+running the shipped rule's exact `WHERE` clause rather than by reading it. The alert was fired
+deliberately — shipped SQL verbatim but for the time constant, real destination — and the
+notification was read back off the ntfy topic. Temporary alert deleted and
+`scripts/telemetry-alerts.sh` re-run, leaving exactly the nine alerts it defines.
+
+Row 13 added to `~/ArchitectureRedesign/docs/open-questions.md`, recording the §4 caching
+deviation as undecided with its costs. **Committed locally only — that repository has no git
+remote**, unlike the guideline's claim in §5 that every repository has one. Not this work's to
+fix, but the row lives on this host alone until someone gives it a remote.
+
+The README's three false claims are corrected: the endpoint is live rather than aspirational,
+the image is `modelcatalog` with `model-catalog` documented as a still-updated alias, and
+`/health` is documented beside `/healthz` with the difference between them spelled out. The
+absence of rate limiting and of any availability guarantee is now stated where a prospective user
+reads it, rather than only in the spec.
+
+**2026-08-22 — Phase 4 settle: `ACME_EMAIL` raised, not decided.** It stays deferred. Unset, a
+renewal failure is silent for every site on this host; setting it is a change to the shared
+proxy's `.env` on behalf of one service, which is the estate-wide edit §9 asks not be made
+quietly. This certificate runs to 2026-11-20, so nothing is urgent.

@@ -8,7 +8,11 @@ A canonical catalog of LLM model metadata — pricing, context windows, capabili
 https://models.pinkrooster.nl
 ```
 
-Read-only, no authentication. Intended for low-volume use; if you need higher throughput or stronger SLAs, self-host (see below).
+Read-only, no authentication, live since 2026-08-22. Intended for low-volume use; if you need
+higher throughput or stronger SLAs, self-host (see below).
+
+There is no rate limiting and no availability guarantee — it is one container on one host. Be
+reasonable with it, and self-host if the catalog matters to something you run.
 
 ## Quickstart
 
@@ -214,7 +218,8 @@ The DTOs are shared with the service and form the wire contract. While the packa
 
 | Endpoint | Auth | Description |
 |---|---|---|
-| `GET /healthz` | open | Liveness; returns staleness of last sync |
+| `GET /health` | open | Reports each upstream feed by name, with its last success and last error. 503 only when there is no snapshot to serve |
+| `GET /healthz` | open | Liveness; returns staleness of last sync. 503 once the snapshot is past the stale threshold — a different question from `/health`: "should you trust this data", not "is this container serving" |
 | `GET /metrics` | open | Prometheus metrics |
 | `GET /v1/models` | open | All models, optionally filtered by `?provider=` `?modality=` |
 | `GET /v1/models/{provider}/{modelId}` | open | Single model |
@@ -224,12 +229,17 @@ The DTOs are shared with the service and form the wire contract. While the packa
 
 ## Self-hosting
 
+The image is `ghcr.io/pinkroosterai/modelcatalog`, tagged `current` (follows `main`) and with
+the git short sha of every build. `ghcr.io/pinkroosterai/model-catalog` — the name this README
+gave before 2026-08-22 — still receives the same digests as `latest`, so existing pulls keep
+working and keep updating, but new deployments should use the name above.
+
 ```bash
 docker run -d \
   --name model-catalog \
   -p 8080:8080 \
   -v model-catalog-data:/app/data \
-  ghcr.io/pinkroosterai/model-catalog:latest
+  ghcr.io/pinkroosterai/modelcatalog:current
 ```
 
 To enable `/v1/refresh`, set at least one API key:
@@ -239,7 +249,7 @@ docker run -d \
   ... \
   -e ModelRegistry__ApiKeys__0__Name=admin \
   -e ModelRegistry__ApiKeys__0__Key="$(openssl rand -hex 32)" \
-  ghcr.io/pinkroosterai/model-catalog:latest
+  ghcr.io/pinkroosterai/modelcatalog:current
 ```
 
 The service fetches all three upstream catalogs on startup, then daily at 01:00 UTC.

@@ -556,3 +556,43 @@ Worth carrying to any other stack written from this template — §5's "no value
 secret and wrong for a typed optional.
 
 Source: local runs against the built service, 2026-08-22.
+
+## Phase 4 raised, not decided: `ACME_EMAIL` on the Caddy stack, 2026-08-22
+
+The spec deferred this and it stays deferred, because it is estate-wide rather than this
+service's to settle. The Caddyfile carries it as a commented recommendation:
+
+```
+# Recommended once ACME_EMAIL is set in .env — Let's Encrypt then sends
+# expiry and problem notices instead of failing silently.
+```
+
+Unset, a renewal failure is silent for **every** site on this host, not just this one. This
+service's certificate was issued 2026-08-22 and expires 2026-11-20, so nothing is urgent, and a
+change to the shared proxy's `.env` on behalf of one service is the kind of quiet estate-wide
+edit §9 exists to prevent. Left for the operator.
+
+## Phase 4 verified: the stale-feed alert fires, 2026-08-22
+
+Two separate things had to be true, and each was checked on its own.
+
+**The rule's scope.** `feed-stale-daily` matches by exclusion, so nothing names this service and
+a label collision would silently move a feed into the wrong window. Running the shipped rule's
+exact `WHERE` clause against OpenObserve returns `litellm`, `modelsdev`, `neushoorn`,
+`openrouter` — the three new feeds are in scope, and none collides with `FAST_FEEDS` or
+`WEEKLY_FEEDS`.
+
+**Delivery.** A temporary alert was created with the shipped SQL **verbatim except the time
+constant** — `now` in place of `now - 129600`, since the honest alternative is waiting 36 hours —
+at a one-minute frequency, against the real `ntfy` destination and template. It fired, and the
+notification was read back off the topic: title `feed-stale-daily-firetest`, body naming the
+stream. Changing only the constant is what makes this a real test: the failure §7 warns about is
+a query that can never match — a wrong label, a wrong stream, a typo — and that is exactly what
+holding the rest of the query fixed exercises.
+
+The temporary alert was deleted and `scripts/telemetry-alerts.sh` re-run, leaving the nine alerts
+the script defines and nothing else. A `container-restarted` alert also arrived unprompted during
+this work, tripped by the deploy's own restarts — incidental confirmation that the estate's
+alerting path was already live.
+
+Source: OpenObserve API and `ntfy.sh` topic poll on this host, 2026-08-22.
