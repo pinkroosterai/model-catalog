@@ -70,9 +70,11 @@ services:
       timeout: 5s
       retries: 3
       # Only the very first start does a full sync — every later one loads the snapshot from the
-      # volume before mapping an endpoint. Generous on purpose: a start_period shorter than a
-      # cold sync restarts the container mid-sync, forever.
-      start_period: 120s
+      # volume before mapping an endpoint. A cold sync measured 1.17s on this host, and the worst
+      # case is bounded at roughly 30s by SyncPipeline's per-source timeout, the three feeds being
+      # fetched in parallel. 60s is two times that bound; anything shorter than a cold sync
+      # restarts the container mid-sync, forever.
+      start_period: 60s
 
 volumes:
   # Named rather than left to compose, which would derive it from the project name — and a
