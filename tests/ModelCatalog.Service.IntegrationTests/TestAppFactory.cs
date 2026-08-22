@@ -6,6 +6,7 @@ using Microsoft.Extensions.Hosting;
 using ModelCatalog.Client.Dtos;
 using ModelCatalog.Service.IntegrationTests.Fakes;
 using ModelCatalog.Service.Sources;
+using Quartz;
 
 namespace ModelCatalog.Service.IntegrationTests;
 
@@ -40,6 +41,27 @@ public sealed class TestAppFactory : WebApplicationFactory<Program>
             services.RemoveAll<ISource>();
             foreach (var f in Fakes)
                 services.AddSingleton<ISource>(f);
+
+            // Quartz's LogProvider caches the first ILoggerFactory it is given for the lifetime
+            // of the *process*, not the host. Several test classes build and dispose their own
+            // factory, so the second one to start resolved a disposed logger factory and threw
+            // ObjectDisposedException before a single request was made. Serilog used to hide
+            // this: Quartz bound to its process-wide static logger instead of the container's.
+            //
+            // Nothing here needs the scheduler — RunSyncOnStartup is false, the cron is parked
+            // in 2100, and /v1/refresh drives SyncPipeline directly — so the hosted service
+            // comes out rather than the tests being reshaped around a static.
+            foreach (
+                var descriptor in services
+                    .Where(d =>
+                        d.ServiceType == typeof(IHostedService)
+                        && d.ImplementationType?.Assembly == typeof(QuartzHostedService).Assembly
+                    )
+                    .ToList()
+            )
+            {
+                services.Remove(descriptor);
+            }
         });
         return base.CreateHost(builder);
     }

@@ -391,3 +391,90 @@ Source: `~/ServerManagement/stacks/telemetry/otel-collector-config.yaml`, `deplo
   Phase 2's `Settle first`; it is the spec's deferred row about the README's self-host path.
 - **Whether `ACME_EMAIL` is set on the Caddy stack** — carried into Phase 4's `Settle first`,
   from the spec's deferred register. Estate-wide, not this service's to decide alone.
+
+---
+
+# Execution findings
+
+## Phase 1 settled: the interval metric derives from the cron, 2026-08-22
+
+`feed_expected_interval_seconds` must not be a hardcoded 86400. `ModelRegistry:SyncCron` is
+configurable, so a hardcoded constant becomes a lie the moment the schedule moves — and the
+alert reads that value as the feed's contract, which is precisely §7's warning about "a feed
+that starts running less often becomes a rule nobody updates."
+
+Quartz is already a dependency and parses the expression the scheduler itself uses.
+`CronExpression.GetNextValidTimeAfter(DateTimeOffset)` is present in Quartz 3.19.1 — confirmed
+against the resolved assembly at
+`~/.nuget/packages/quartz/3.19.1/lib/net8.0/Quartz.dll`. The gap between the next two valid
+fire times is the interval, and for `0 0 1 * * ?` that is exactly 86400.
+
+The caveat, worth knowing before someone changes the cron: for an irregular schedule — weekdays
+only, say — consecutive gaps differ, so the published value is the *next* interval rather than a
+constant. That is still better than a hardcoded number, because it tracks the expression instead
+of contradicting it.
+
+Source: resolved Quartz assembly on this machine, 2026-08-22.
+
+## Phase 1 settled: `/health` is added, `/healthz` is kept — the image is published
+
+The plan asked whether `/healthz` gets renamed to `/health` per §6's checklist. The answer turns
+on a fact neither the spec nor the plan had: **this project has already shipped.**
+
+- `git tag` shows `v0.1.0` (2026-04-14) and `v0.2.0` (2026-04-18), so the tag-triggered release
+  workflow has run twice.
+- `ghcr.io/pinkroosterai/model-catalog` exists as a published container package.
+- `ModelCatalog.Client` is on nuget.org at 0.1.0 and 0.2.0 —
+  `https://api.nuget.org/v3-flatcontainer/modelcatalog.client/index.json` lists both.
+
+So `/healthz` is a documented endpoint on a publicly pullable image, and a self-hoster's compose
+healthcheck may well be pointing at it. Renaming it outright would break that silently, four
+months after the fact, to satisfy a naming preference.
+
+**Both are served.** `/health` is added as the estate-contract endpoint and reports the three
+feeds by name rather than a bare status, which is the half of §6 the current endpoint actually
+fails. `/healthz` stays as an alias over the same handler. The cost is one extra route mapping;
+the cost of the alternative is a broken healthcheck somebody debugs from the outside.
+
+This supersedes the spec's `[THIN]` note on `/healthz` staying public, which assumed the only
+question was the name.
+
+Source: `git tag`, `gh api /user/packages`, nuget.org flat container index, all 2026-08-22.
+
+## Phase 1 settled: the container probe and the HTTP endpoint answer different questions
+
+Related, and worth separating before the healthcheck is written. `/health` returns 503 when the
+snapshot is past `StaleThresholdHours` — correct for an HTTP caller deciding whether to trust
+the answer.
+
+The **container** healthcheck must not use that semantics. A catalog three days stale is still
+serving correct-if-old data, and marking the container unhealthy for it duplicates the
+`feed-stale-daily` alert while telling the operator something misleading. The probe fails only
+when the process cannot serve at all — no snapshot in memory.
+
+This matches the estate precedent: the assistant's `--health` is a CLI flag reading the
+process's own state, not an HTTP call to itself.
+
+Source: `spec.md § Qualities and constraints` ("correctness over freshness"),
+`~/Development/NajsPersonalAssistants/compose.yml`, 2026-08-22.
+
+## Phase 1 found: the CI formatting gate has never worked, 2026-08-22
+
+`.github/workflows/ci.yml` installs `CSharpier --version 1.2.*` and then runs
+`dotnet csharpier check src tests`. CSharpier 1.x ships a `csharpier` binary and no
+`dotnet-csharpier` shim, so that command cannot resolve — verified by installing 1.2.6 locally,
+which reports "You can invoke the tool using the following command: csharpier" and leaves
+`dotnet csharpier --version` failing.
+
+`gh run list` shows every CI run failing since 2026-04-14, each in about 30 seconds, and
+`gh run view 32564159520 --log-failed` names the step: "Could not execute because the specified
+command or file was not found." The step runs *before* `dotnet build` and `dotnet test`, so the
+suite has not executed in CI for four months. Only the tag-triggered Release workflow, which does
+not invoke CSharpier, has been green.
+
+The fix is one word — `csharpier check src tests` — and belongs to Phase 2, which rewrites the
+workflows. Worth stating plainly because Phase 2's `Done when` says the image build is "gated on
+the tests": until this is repaired, that gate does not exist.
+
+Source: `gh run list`, `gh run view 32564159520 --log-failed`, local `dotnet tool install`, all
+2026-08-22.

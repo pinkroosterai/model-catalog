@@ -24,7 +24,7 @@ public sealed class ModelCatalogClient(
     private static readonly Action<ILogger, string, Exception?> LogStale =
         LoggerMessage.Define<string>(
             LogLevel.Warning,
-            new EventId(1, "StaleServed"),
+            new EventId(1, "catalog.stale.served"),
             "Serving stale cache for {Url}"
         );
 

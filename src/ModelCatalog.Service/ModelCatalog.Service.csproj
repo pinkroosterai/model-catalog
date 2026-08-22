@@ -10,7 +10,6 @@
     <PackageReference Include="Polly" />
     <PackageReference Include="Quartz" />
     <PackageReference Include="Quartz.Extensions.Hosting" />
-    <PackageReference Include="Serilog.AspNetCore" />
     <PackageReference Include="prometheus-net.AspNetCore" />
   </ItemGroup>
   <ItemGroup>

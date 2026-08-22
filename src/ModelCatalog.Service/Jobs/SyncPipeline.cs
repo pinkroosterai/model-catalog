@@ -2,6 +2,7 @@ using ModelCatalog.Client.Dtos;
 using ModelCatalog.Service.Catalog;
 using ModelCatalog.Service.Merging;
 using ModelCatalog.Service.Metrics;
+using ModelCatalog.Service.Observability;
 using ModelCatalog.Service.Sources;
 using Prometheus;
 
@@ -18,19 +19,22 @@ public sealed class SyncPipeline(
     private static readonly Action<ILogger, string, Exception?> LogSourceFailed =
         LoggerMessage.Define<string>(
             LogLevel.Warning,
-            new EventId(1, "SourceFailed"),
+            new EventId(1, "feed.poll.failed"),
             "Source {Source} fetch failed"
         );
 
     private static readonly Action<ILogger, int, int, int, Exception?> LogSyncComplete =
         LoggerMessage.Define<int, int, int>(
             LogLevel.Information,
-            new EventId(2, "SyncComplete"),
+            new EventId(2, "sync.completed"),
             "Sync complete: {ModelCount} models, {SuccessCount}/{TotalCount} sources"
         );
 
     public async Task RunAsync(CancellationToken ct)
     {
+        // Every line this run produces shares one id, so a sync can be read end to end the same
+        // way a request can. Without it these lines carry "-".
+        using var correlation = RequestId.Begin(logger, RequestId.New());
         using var timer = MetricsRegistry.RefreshDuration.NewTimer();
 
         var now = clock.GetUtcNow();
@@ -66,10 +70,12 @@ public sealed class SyncPipeline(
         {
             if (r.Snap is null)
                 MetricsRegistry.RefreshErrors.WithLabels(r.Name).Inc();
+            // Only on success, and only ever here: the labelled child does not exist until a
+            // feed has actually worked, which is how §7's "no value, not zero" holds.
             if (r.State.LastSuccess is { } ls)
                 MetricsRegistry
-                    .SourceLastSuccessSeconds.WithLabels(r.Name)
-                    .Set((clock.GetUtcNow() - ls).TotalSeconds);
+                    .FeedLastSuccessTimestampSeconds.WithLabels(r.Name)
+                    .Set(ls.ToUnixTimeSeconds());
         }
         MetricsRegistry.ModelsTotal.Set(merged.Count);
 

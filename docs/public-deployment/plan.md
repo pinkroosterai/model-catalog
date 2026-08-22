@@ -3,7 +3,7 @@
 **Goal** — Run ModelCatalog as the `modelcatalog` stack behind Caddy on
 `models.pinkrooster.nl`, built to the estate's operational contract, until all twelve of the
 spec's success criteria pass and the stale-feed alert has fired once on purpose.
-**Status** — not started
+**Status** — phase 1 done
 **Research** — `research.md`
 **Spec** — `spec.md` (status `buildable`, no blocking marks)
 
@@ -39,7 +39,7 @@ alert can be proven.
 
 Code only, verifiable on a laptop. Nothing here touches deployment.
 
-**Status** — not started
+**Status** — done
 **Rests on**
 - `~/Development/NajsPersonalAssistants/src/Assistant.Core/Observability/` still holds
   `EstateLogging.cs`, `JsonLogFormatter.cs` and `RequestId.cs` in the shape
@@ -59,25 +59,25 @@ Code only, verifiable on a laptop. Nothing here touches deployment.
   is a change to a published surface. Answer goes under `research.md § Still open`.
 
 **Tasks**
-- [ ] Replace Serilog with the estate's JSON console logging, service name `modelcatalog` —
+- [x] Replace Serilog with the estate's JSON console logging, service name `modelcatalog` —
       copy the three files named in `research.md § Copying the estate's logging`; Serilog is
       wired only in `src/ModelCatalog.Service/Program.cs` and has no other job once they land.
-- [ ] Rename the log event identifiers to §7's dotted stable-identifier convention — the call
+- [x] Rename the log event identifiers to §7's dotted stable-identifier convention — the call
       sites are the `LoggerMessage.Define` fields in `src/ModelCatalog.Service/Jobs/SyncPipeline.cs`
       and `src/ModelCatalog.Client/ModelCatalogClient.cs`; §7 forbids a second spelling of an
       existing event, so pick each name once.
-- [ ] Give HTTP requests a `request_id` that reaches the formatter — the assistant's
+- [x] Give HTTP requests a `request_id` that reaches the formatter — the assistant's
       `Assistant.Web/Observability/RequestIdMiddleware.cs` is the working shape, and the
       background sync needs one too or its lines carry `-`.
-- [ ] Replace `model_registry_source_last_success_seconds` with the estate's pair,
+- [x] Replace `model_registry_source_last_success_seconds` with the estate's pair,
       `feed_last_success_timestamp_seconds` and `feed_expected_interval_seconds`, labelled
       `feed` — metrics are declared in `src/ModelCatalog.Service/Metrics/MetricsRegistry.cs` and
       written in `SyncPipeline`; the value becomes an absolute Unix timestamp, and the
       never-succeeded property must survive as `research.md § The "no value, not zero" rule`
       describes.
-- [ ] Add a health probe the container healthcheck can call without curl, which the runtime
+- [x] Add a health probe the container healthcheck can call without curl, which the runtime
       image does not carry — the assistant's `--health` flag is the estate precedent.
-- [ ] Add the one-line pointer to `architecture-guideline.md` that §6 requires in `CLAUDE.md` —
+- [x] Add the one-line pointer to `architecture-guideline.md` that §6 requires in `CLAUDE.md` —
       the file exists and currently has none.
 
 **Done when** — `dotnet test ModelCatalog.slnx` passes; running the service locally writes JSON
@@ -98,9 +98,11 @@ probe exits non-zero against a stopped service and zero against a running one.
 
 **Settle first**
 - Are the existing `ghcr.io/pinkroosterai/model-catalog` tags deleted, left in place, or
-  redirected? The spec defers this; the README's self-host instructions name that path, so
-  whichever way it goes the README follows in Phase 4. Answer goes under
-  `research.md § Still open`.
+  redirected? **Reworded 2026-08-22:** this is no longer housekeeping. The package is published
+  and `ModelCatalog.Client` is on nuget.org at 0.1.0 and 0.2.0, so `model-catalog:latest` may be
+  running somewhere outside this estate. Deleting it breaks those pulls; keeping it means two
+  image paths, one of which stops receiving updates. The README follows either way in Phase 4.
+  Answer goes under `research.md § Still open`.
 
 **Tasks**
 - [ ] Write `compose.yml` at the repository root on the estate's shape and delete
@@ -207,4 +209,54 @@ path CI actually pushes and describes the endpoint's real state.
 
 ## Log
 
-<!-- Empty at hand-over. /execute-plan appends: date, phase, what changed and why. -->
+**2026-08-22 — Phase 1 verify.** All three `Rests on` hold: the assistant's three Observability
+files are present, `SyncPipeline` still gates the success gauge behind
+`if (r.State.LastSuccess is { } ls)`, and all three `LoggerMessage.Define` sites carry named
+`EventId`s.
+
+**2026-08-22 — Phase 1 settle, and a correction that matters.** Both questions answered in
+`research.md`. The second one turned on a fact the plan did not have: **this project has already
+shipped.** Tags `v0.1.0` and `v0.2.0` (April 2026) ran the release workflow,
+`ghcr.io/pinkroosterai/model-catalog` is a published package, and `ModelCatalog.Client` 0.1.0 and
+0.2.0 are on nuget.org. The planning research asserted the service had never run, which is true
+of *this host* and false of the artifacts.
+
+Consequences: `/healthz` is a shipped surface on a pullable image, so it is kept as an alias
+rather than renamed — `/health` is added beside it. And Phase 2's `Settle first` about the old
+ghcr tags is now a question about a package with real consumers, not a housekeeping one. Phase 2's
+entry is reworded to say so.
+
+**2026-08-22 — Phase 1 scope note.** `feed_expected_interval_seconds` derives from the Quartz cron
+expression rather than being hardcoded, so it cannot contradict `ModelRegistry:SyncCron`. Reasoning
+and the irregular-schedule caveat are in `research.md`.
+
+**2026-08-22 — Phase 1 done.** `dotnet test ModelCatalog.slnx` is 26/26 green and
+`csharpier check src tests` is clean across 62 files. Verified against a running instance
+rather than inferred: log lines are JSON carrying all five §7 fields with
+`"service":"modelcatalog"` and a dotted `"event":"sync.completed"`; an inbound
+`X-Request-Id` is echoed and correlates the request's lines; `feed_expected_interval_seconds`
+reads 86400 for all three feeds, derived from the cron rather than hardcoded;
+`feed_last_success_timestamp_seconds` was **absent** before the first sync and appeared
+afterwards as `1787391492` = 2026-08-22 09:38:12 UTC, so §7's "no value, not zero" holds in
+practice. `/health` reports the three feeds by name; `/healthz` still answers 200 unchanged.
+The probe exits 1 with no snapshot, 1 against a dead port (with a distinguishable
+`Connection refused` on stderr) and 0 once a snapshot exists. A real sync merged 10,273 models
+from 3/3 feeds and persisted a 16 MB snapshot.
+
+**2026-08-22 — Phase 1, an unplanned fix in the test host.** Removing Serilog broke two
+integration tests with `ObjectDisposedException: LoggerFactory`. The cause is a latent defect
+this change exposed rather than one it created: Quartz's `LogProvider` caches the first
+`ILoggerFactory` for the lifetime of the *process*, and several test classes build and dispose
+their own `TestAppFactory`, so the second host to start resolved a disposed factory. Serilog had
+been masking it by binding Quartz to its own process-wide static logger. Production runs one host
+per process and never hits this. The scheduler is now removed from the test host, which needs it
+for nothing — `RunSyncOnStartup` is false, the cron is parked in 2100, and `/v1/refresh` drives
+`SyncPipeline` directly.
+
+**2026-08-22 — Phase 1 found: CI has been red since April, and the tests have never run.**
+`.github/workflows/ci.yml` runs `dotnet csharpier check src tests`, but CSharpier 1.x installs a
+`csharpier` binary and no `dotnet-csharpier` shim, so the step dies with "Could not execute
+because the specified command or file was not found." Confirmed against run 32564159520 and four
+earlier ones — every CI run since 2026-04-14 has failed at that step, which sits *before* build
+and test, so the suite has not run in CI for four months. Left for Phase 2, which owns the
+workflows; the plan's note about preserving the formatting gate now also means repairing it.
