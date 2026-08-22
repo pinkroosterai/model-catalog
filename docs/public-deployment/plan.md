@@ -88,7 +88,7 @@ probe exits non-zero against a stopped service and zero against a running one.
 
 ## Phase 2 — Package the stack and publish the image
 
-**Status** — not started
+**Status** — in progress
 **Rests on**
 - Phase 1 merged to `main`, so the image built here contains the contract changes Phase 3
   verifies.
@@ -97,32 +97,31 @@ probe exits non-zero against a stopped service and zero against a running one.
 - Push rights to `ghcr.io/pinkroosterai`.
 
 **Settle first**
-- Are the existing `ghcr.io/pinkroosterai/model-catalog` tags deleted, left in place, or
-  redirected? **Reworded 2026-08-22:** this is no longer housekeeping. The package is published
-  and `ModelCatalog.Client` is on nuget.org at 0.1.0 and 0.2.0, so `model-catalog:latest` may be
-  running somewhere outside this estate. Deleting it breaks those pulls; keeping it means two
-  image paths, one of which stops receiving updates. The README follows either way in Phase 4.
-  Answer goes under `research.md § Still open`.
+- ~~Are the existing `ghcr.io/pinkroosterai/model-catalog` tags deleted, left in place, or
+  redirected?~~ **Answered 2026-08-22** — the package is public and the instruction to pull it
+  ships inside a public NuGet package, so CI publishes both names from the same build rather than
+  deleting (breaks pulls) or freezing (strands people on April code). See
+  `research.md § Phase 2 settled`.
 
 **Tasks**
-- [ ] Write `compose.yml` at the repository root on the estate's shape and delete
+- [x] Write `compose.yml` at the repository root on the estate's shape and delete
       `deploy/docker-compose.yml` — `~/Development/PromptImprover/compose.yml` is the closest
       analogue (single app container, one data directory) and carries the `x-logging` anchor,
       the two `com.pinkrooster.*` labels, `expose` rather than `ports`, and the external `edge`
       and `telemetry` networks; container `modelcatalog-api`, stack `modelcatalog`, snapshot on
       a named volume per `research.md § The bind mount would silently fail to persist`.
-- [ ] Add the healthcheck to that compose service, using Phase 1's probe — `start_period` must
+- [x] Add the healthcheck to that compose service, using Phase 1's probe — `start_period` must
       exceed a cold sync, which is unmeasured; the spec flags it and Phase 3 measures it.
-- [ ] Commit a complete `.env.example` — §5 requires every key present with no values, and
+- [x] Commit a complete `.env.example` — §5 requires every key present with no values, and
       compose must not read a key the example omits.
-- [ ] Move image building to the estate's shape: build on push to `main`, gated on the tests,
+- [x] Move image building to the estate's shape: build on push to `main`, gated on the tests,
       pushing `<git-short-sha>` and `current` under the `modelcatalog` image name —
       `~/Development/NajsPersonalAssistants/.github/workflows/image.yml` is the pattern;
       `.github/workflows/release.yml` currently triggers on `v*.*.*` tags and pushes `:latest`.
       `.github/workflows/ci.yml` already gates `main` on `dotnet csharpier check` as well as the
       tests, so whatever shape the two workflows end up in, the formatting gate survives — the
       assistant's pattern has no equivalent and following it literally would drop it.
-- [ ] Keep the NuGet packaging job on its tag trigger — the package and the image release on
+- [x] Keep the NuGet packaging job on its tag trigger — the package and the image release on
       genuinely different cadences and the package version is set by hand in the csproj.
 
 **Done when** — a push to `main` produces a green workflow that pushes both
@@ -260,3 +259,22 @@ because the specified command or file was not found." Confirmed against run 3256
 earlier ones — every CI run since 2026-04-14 has failed at that step, which sits *before* build
 and test, so the suite has not run in CI for four months. Left for Phase 2, which owns the
 workflows; the plan's note about preserving the formatting gate now also means repairing it.
+
+
+**2026-08-22 — Phase 2 built.** `compose.yml` at the root on the estate's shape, `deploy/compose`
+deleted, `.env.example` complete, both workflows rewritten. `docker compose config` resolves with
+no published ports, `edge` and `telemetry` both external, and the named volume
+`modelcatalog-data`. Every variable compose interpolates — `IMAGE_TAG`, `EDGE_NETWORK`,
+`TELEMETRY_NETWORK` — is present in `.env.example`.
+
+**2026-08-22 — Phase 2 found: `.env` was not gitignored.** `.gitignore` covered `bin/`, `obj/`,
+`data/` and editor directories but not `.env`, so the real credentials file §5 requires beside
+compose would have been committed by the next `git add -A`. Added. Nothing had been committed —
+checked before the fix — and the `.env` created here to validate compose carries only the empty
+keys from the example.
+
+**2026-08-22 — Phase 2: the CI repair.** `dotnet csharpier check` becomes `csharpier check` with
+`$HOME/.dotnet/tools` put on `GITHUB_PATH`, which is the one-word fix for four months of red. The
+image job is new and gated on `needs: build-test`, so the estate's "gated on the tests" is real
+rather than nominal for the first time. `release.yml` keeps only the NuGet job: a tag-triggered
+image would leave `current` pointing at the last release rather than at main.

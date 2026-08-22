@@ -1,25 +1,86 @@
 name: CI
+
 on:
   pull_request:
   push:
     branches: [main]
 
+# A newer push makes a running build pointless.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build-test:
+    name: build and test
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      checks: write
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
         with:
           global-json-file: global.json
+
       - run: dotnet tool install --global CSharpier --version 1.2.*
+
+      # CSharpier 1.x installs a `csharpier` binary and ships no `dotnet-csharpier` shim, so the
+      # `dotnet csharpier` form this step used could never resolve. It failed every run from
+      # 2026-04-14 to 2026-08-22 with "Could not execute because the specified command or file
+      # was not found" — and because it sits ahead of build and test, the suite did not run in
+      # CI for four months while the workflow reported red for a formatting reason nobody read.
+      - run: echo "$HOME/.dotnet/tools" >> "$GITHUB_PATH"
+      - run: csharpier check src tests
+
       - run: dotnet restore ModelCatalog.slnx
-      - run: dotnet csharpier check src tests
       - run: dotnet build ModelCatalog.slnx --no-restore -c Release
       - run: dotnet test ModelCatalog.slnx --no-build -c Release --logger "trx;LogFileName=tests.trx"
+
       - uses: dorny/test-reporter@v1
         if: always()
         with:
           name: dotnet tests
           path: '**/tests.trx'
           reporter: dotnet-trx
+
+  image:
+    name: build and push to ghcr
+    needs: build-test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # The short sha is what a rollback names in .env. `current` moves with every push; this
+      # tag never does, which is the whole point of keeping both.
+      - id: version
+        run: echo "sha=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+
+      # Two names, one build, same digests. `modelcatalog` is canonical and what this estate
+      # pulls, per architecture-guideline.md §5. `model-catalog` is the name a public README on
+      # nuget.org has been telling people to `docker run` since April, and it is kept fed rather
+      # than deleted (breaks those pulls) or frozen (strands them on April code, silently).
+      - uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: deploy/Dockerfile
+          push: true
+          tags: |
+            ghcr.io/pinkroosterai/modelcatalog:${{ steps.version.outputs.sha }}
+            ghcr.io/pinkroosterai/modelcatalog:current
+            ghcr.io/pinkroosterai/model-catalog:${{ steps.version.outputs.sha }}
+            ghcr.io/pinkroosterai/model-catalog:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

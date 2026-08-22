@@ -1,32 +1,21 @@
 name: Release
+
+# Tags publish the NuGet package only. The container image is built by CI on every push to
+# main and tagged with the short sha plus `current`, because the estate pulls a moving tag and
+# rolls back by sha — a tag-triggered image would leave `current` pointing at whatever was last
+# released rather than what main says.
+#
+# The package version is set by hand in ModelCatalog.Client.csproj, so bump it in the same
+# commit as the tag.
 on:
   push:
     tags: ['v*.*.*']
 
 jobs:
-  docker:
+  nuget:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      packages: write
-    steps:
-      - uses: actions/checkout@v4
-      - uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-      - uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: deploy/Dockerfile
-          push: true
-          tags: |
-            ghcr.io/${{ github.repository }}:${{ github.ref_name }}
-            ghcr.io/${{ github.repository }}:latest
-
-  nuget:
-    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4

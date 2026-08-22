@@ -1,0 +1,91 @@
+# ModelCatalog — the estate's canonical catalog of LLM model metadata: pricing, context
+# windows and capabilities, merged from LiteLLM, OpenRouter and models.dev.
+#
+# One container. There is no database — the merged catalog is a single JSON snapshot held in
+# memory and persisted to a volume, so a restart serves the previous catalog immediately
+# instead of nothing.
+
+name: modelcatalog
+
+# Logging for every container in this stack, following the estate's shape: the two labels are
+# what let the collector identify a line, and the rotation is there because json-file grows
+# without limit and the disk alert would fire for the least interesting reason on the server.
+x-logging: &logging
+  driver: json-file
+  options:
+    labels: com.pinkrooster.stack,com.pinkrooster.role
+    max-size: 10m
+    max-file: "3"
+
+services:
+  api:
+    # Built by Actions on every push to main, never on this host. `current` follows main; set
+    # IMAGE_TAG to a short sha in .env to roll back.
+    image: ghcr.io/pinkroosterai/modelcatalog:${IMAGE_TAG:-current}
+    container_name: modelcatalog-api
+    labels:
+      com.pinkrooster.stack: modelcatalog
+      com.pinkrooster.role: api
+    logging: *logging
+    restart: unless-stopped
+
+    # Real values in .env beside this file (gitignored); .env.example lists what is required.
+    # The only secret here is the refresh API key — with none set, POST /v1/refresh answers 503
+    # (disabled) rather than 401, so an empty .env is a working read-only deployment.
+    env_file: .env
+    environment:
+      ASPNETCORE_URLS: http://+:8080
+
+    # No published ports: Caddy reaches this as `modelcatalog-api:8080` over the edge network,
+    # and estate consumers call that same address directly. See architecture-guideline.md §4 —
+    # Docker's iptables rules bypass ufw, so a published port is a decision about the internet.
+    expose:
+      - "8080"
+
+    volumes:
+      # A named volume rather than a bind mount, and that is load-bearing. This image runs as
+      # uid 1654 (`USER app`), while a bind mount Docker creates would be root-owned and
+      # unwritable by it. The failure would be silent: SnapshotStore assigns the in-memory
+      # snapshot before it opens the file, so the service would serve a correct catalog, persist
+      # nothing, and only reveal it at the next restart — coming up empty. Docker initialises a
+      # fresh named volume from the image's own contents and ownership, and the Dockerfile
+      # already chowns /app/data to that user, so this comes up writable with no manual step.
+      - data:/app/data
+
+    networks:
+      # Caddy reaches this over edge, estate consumers call it over edge, and it is also the
+      # only route out — the three upstream feeds are fetched directly, not through the outbound
+      # cache. That deviation from §4 is recorded in ~/ArchitectureRedesign/docs/open-questions.md.
+      - edge
+      # The collector scrapes /metrics over this. It is also listed in the collector's own static
+      # scrape job — a service is invisible until it is.
+      - telemetry
+
+    healthcheck:
+      # Asks the running app rather than curl, which this image does not carry. The probe fails
+      # only when there is no snapshot to serve; a stale catalog is still serving correct-if-old
+      # data and is `feed-stale-daily`'s business, not this container's health.
+      test: ["CMD", "dotnet", "ModelCatalog.Service.dll", "--health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      # Only the very first start does a full sync — every later one loads the snapshot from the
+      # volume before mapping an endpoint. Generous on purpose: a start_period shorter than a
+      # cold sync restarts the container mid-sync, forever.
+      start_period: 120s
+
+volumes:
+  # Named rather than left to compose, which would derive it from the project name — and a
+  # service whose volume just changed name starts on an empty one and says nothing about it.
+  data:
+    name: modelcatalog-data
+
+networks:
+  edge:
+    external: true
+    name: ${EDGE_NETWORK:-edge}
+  # Shared and external like edge, but internal: true — it carries scrapes and nothing else.
+  # See architecture-guideline.md §4.
+  telemetry:
+    external: true
+    name: ${TELEMETRY_NETWORK:-telemetry}

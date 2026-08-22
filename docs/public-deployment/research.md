@@ -478,3 +478,26 @@ the tests": until this is repaired, that gate does not exist.
 
 Source: `gh run list`, `gh run view 32564159520 --log-failed`, local `dotnet tool install`, all
 2026-08-22.
+
+## Phase 2 settled: the old image keeps being published as an alias, 2026-08-22
+
+`gh api /user/packages/container/model-catalog` reports `"visibility":"public"`, created
+2026-04-14, two versions carrying `v0.1.0`, `v0.2.0` and `latest`. The README that tells people
+to `docker run ghcr.io/pinkroosterai/model-catalog:latest` ships inside `ModelCatalog.Client`,
+which is public on nuget.org. So the instruction is genuinely distributed and the image is
+genuinely pullable by anyone.
+
+That rules out both simple answers. **Deleting** the package breaks those pulls — and could not be
+done from here anyway, the local token holding `read:packages` but not `delete:packages`.
+**Freezing** it is worse in the way this estate dislikes most: a self-hoster keeps pulling
+`:latest`, keeps getting April code, and nothing tells them. A stale artifact that still answers
+is the silent failure, not the loud one.
+
+**So CI pushes both names from the same build.** `ghcr.io/pinkroosterai/modelcatalog` is
+canonical and what the estate pulls, per §5's `ghcr.io/pinkroosterai/<stack>`;
+`ghcr.io/pinkroosterai/model-catalog` continues to receive the same digests so nobody is stranded.
+It costs one extra tag pair on a build that already happened — no extra build time — and two
+package paths to look at instead of one. The README is corrected in Phase 4 to name the canonical
+path and mark the other legacy.
+
+Source: `gh api /user/packages/container/model-catalog`, `gh auth status`, 2026-08-22.
