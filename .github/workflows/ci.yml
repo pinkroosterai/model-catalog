@@ -71,10 +71,7 @@ jobs:
       - id: version
         run: echo "sha=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
 
-      # Two names, one build, same digests. `modelcatalog` is canonical and what this estate
-      # pulls, per architecture-guideline.md §5. `model-catalog` is the name a public README on
-      # nuget.org has been telling people to `docker run` since April, and it is kept fed rather
-      # than deleted (breaks those pulls) or frozen (strands them on April code, silently).
+      # One image name, per architecture-guideline.md §5: ghcr.io/pinkroosterai/<stack>.
       - uses: docker/build-push-action@v5
         with:
           context: .
@@ -83,7 +80,5 @@ jobs:
           tags: |
             ghcr.io/pinkroosterai/modelcatalog:${{ steps.version.outputs.sha }}
             ghcr.io/pinkroosterai/modelcatalog:current
-            ghcr.io/pinkroosterai/model-catalog:${{ steps.version.outputs.sha }}
-            ghcr.io/pinkroosterai/model-catalog:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max

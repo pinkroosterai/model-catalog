@@ -383,3 +383,12 @@ interval metric could drift apart — the exact thing deriving it was meant to p
 `release.yml`'s new header and `CLAUDE.md` both claimed the csproj version governs a release, when
 `-p:Version` from the tag overrides it, and `CLAUDE.md` still described a release workflow that
 no longer builds images.
+
+**2026-08-22 — Reversal, after close: one image name.** Phase 2's `Settle first` was answered by
+publishing both `modelcatalog` and `model-catalog` from one build. The user overruled that the
+same day: only `ghcr.io/pinkroosterai/modelcatalog` exists. The second tag pair is out of
+`ci.yml`, the name is out of the README and `CLAUDE.md`, and the reasoning that produced it is
+marked reversed in `spec.md § Decisions` and `research.md` rather than deleted. The cost was
+raised once and declined — a self-hoster following the April README now gets manifest-unknown.
+Deleting the package itself needs a `delete:packages` token scope and is the operator's step.
+

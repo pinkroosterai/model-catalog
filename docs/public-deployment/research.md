@@ -617,3 +617,21 @@ instead. Three pieces of genuinely new attack surface, none of them a finding:
 
 Not examined here because they are excluded from that review's scope: secrets at rest (`.env` at
 mode 600), and the absence of rate limiting, which is a recorded decision in the spec.
+
+## Reversed the same day: only one image name, 2026-08-22
+
+`§ Phase 2 settled` above concluded that CI should publish `modelcatalog` and `model-catalog` from
+one build, so that anyone following the April README kept working and kept updating. **The user
+overruled it.** Only `ghcr.io/pinkroosterai/modelcatalog` exists; the old package is deleted and
+the name is gone from the workflow, the README and `CLAUDE.md`.
+
+What that costs, stated once and not re-argued: the package was public and the instruction to
+`docker run` it shipped inside `ModelCatalog.Client` on nuget.org, so a self-hoster's next pull
+fails with manifest-unknown rather than resolving anywhere. There is no redirect on ghcr — a
+deleted name is simply gone. Anyone affected has to read the current README.
+
+What it buys: §5's one image path per stack, with nothing to explain and no second package to
+keep alive. The earlier finding stands as the record of what was weighed.
+
+Deleting the package needs a `delete:packages` scope the working token does not carry.
+

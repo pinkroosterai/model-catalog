@@ -230,15 +230,14 @@ The DTOs are shared with the service and form the wire contract. While the packa
 ## Self-hosting
 
 The image is `ghcr.io/pinkroosterai/modelcatalog`, tagged `current` (follows `main`) and with
-the git short sha of every build. `ghcr.io/pinkroosterai/model-catalog` — the name this README
-gave before 2026-08-22 — still receives the same digests as `latest`, so existing pulls keep
-working and keep updating, but new deployments should use the name above.
+the git short sha of every build. Pin a sha in production; `current` moves with every push to
+`main`.
 
 ```bash
 docker run -d \
-  --name model-catalog \
+  --name modelcatalog \
   -p 8080:8080 \
-  -v model-catalog-data:/app/data \
+  -v modelcatalog-data:/app/data \
   ghcr.io/pinkroosterai/modelcatalog:current
 ```
 

@@ -332,10 +332,11 @@ places the build overturned them.
   now answer different questions — `/healthz` is "should you trust this data" (503 when stale),
   `/health` is "is this container serving" (503 only with no snapshot) — and the container probe
   uses the second.
-- **The old image name is still published rather than retired.** Same reason. CI pushes
-  `modelcatalog` (canonical, what the estate pulls) and `model-catalog` (kept fed) from one build.
-  Ruled out: deleting it, which breaks published instructions; and freezing it, which strands
-  self-hosters on April code without saying so.
+- **The old image name is retired.** ~~CI pushes both names from one build.~~ **Reversed
+  2026-08-22, same day, by the user:** only `ghcr.io/pinkroosterai/modelcatalog` exists, the old
+  package is deleted, and the name appears nowhere. The compatibility cost was put and declined —
+  a self-hoster following the April README will get a manifest-unknown error on their next pull
+  rather than a redirect or a stale image. §5 wants one image path per stack and now there is one.
 - **Success criterion 9 could not be checked as worded.** "A snapshot age older than the process
   uptime" is invisible on a normal restart, because `RunSyncOnStartup` defaults to true and the
   sync finishes in about a second, making `FetchedAt` newer than the process either way. The

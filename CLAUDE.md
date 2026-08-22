@@ -106,9 +106,7 @@ config and scraped metric surface.
 
 The image is built by `ci.yml` on every push to `main`, gated on the tests, and pushed as
 `ghcr.io/pinkroosterai/modelcatalog:<git-short-sha>` plus a moving `:current`. The estate pulls
-`current` and rolls back by putting a sha in `IMAGE_TAG`. The same build also pushes
-`ghcr.io/pinkroosterai/model-catalog` — the name a public README on nuget.org has advertised
-since April — so existing self-hosters keep working and keep updating.
+`current` and rolls back by putting a sha in `IMAGE_TAG`.
 
 Tagging `v*.*.*` publishes **only** the NuGet package. `release.yml` derives the version from the
 tag and passes it as `-p:Version`, which overrides `<Version>` in `ModelCatalog.Client.csproj` —
