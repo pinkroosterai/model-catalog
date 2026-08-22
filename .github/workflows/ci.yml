@@ -24,15 +24,18 @@ jobs:
         with:
           global-json-file: global.json
 
-      - run: dotnet tool install --global CSharpier --version 1.2.*
-
-      # CSharpier 1.x installs a `csharpier` binary and ships no `dotnet-csharpier` shim, so the
-      # `dotnet csharpier` form this step used could never resolve. It failed every run from
-      # 2026-04-14 to 2026-08-22 with "Could not execute because the specified command or file
-      # was not found" — and because it sits ahead of build and test, the suite did not run in
-      # CI for four months while the workflow reported red for a formatting reason nobody read.
-      - run: echo "$HOME/.dotnet/tools" >> "$GITHUB_PATH"
-      - run: csharpier check src tests
+      # The formatter is pinned in .config/dotnet-tools.json rather than installed globally, so
+      # CI and every working copy run the same version. A globally-installed formatter floats —
+      # `dotnet tool update` moves it — and one a version ahead of CI's reformats the whole repo
+      # on the next commit.
+      #
+      # This is also what makes `dotnet csharpier` resolve: it is the local-tool invocation form.
+      # The previous step paired that form with a *global* install, where CSharpier 1.x provides
+      # only a `csharpier` binary and no dotnet- shim, so it failed every run from 2026-04-14 to
+      # 2026-08-22 with "Could not execute because the specified command or file was not found" —
+      # ahead of build and test, so the suite did not run in CI for four months.
+      - run: dotnet tool restore
+      - run: dotnet csharpier check src tests
 
       - run: dotnet restore ModelCatalog.slnx
       - run: dotnet build ModelCatalog.slnx --no-restore -c Release

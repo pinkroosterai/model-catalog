@@ -278,3 +278,14 @@ keys from the example.
 image job is new and gated on `needs: build-test`, so the estate's "gated on the tests" is real
 rather than nominal for the first time. `release.yml` keeps only the NuGet job: a tag-triggered
 image would leave `current` pointing at the last release rather than at main.
+
+**2026-08-22 — Phase 2 done.** CI run 32565775551 is green — the first passing run since
+2026-04-14 and the first in which the test suite executed at all. Both image names published from
+that build: `modelcatalog:current` and `:5d5471c`, `model-catalog:latest` and `:5d5471c`.
+
+**2026-08-22 — Phase 2 revised after the fact.** The estate's .NET tooling note says a repository
+enforcing formatting pins its own `.config/dotnet-tools.json` so CI and every working copy agree;
+the global install this workflow used floats. That was already biting — this machine had CSharpier
+1.3.0 against CI's `1.2.*` pin and needed a manual downgrade. The manifest pins 1.2.6 and CI runs
+`dotnet tool restore` first, which also makes the original `dotnet csharpier` command correct: it
+is the local-tool form, and it was the *install* that was wrong all along, not the command.

@@ -501,3 +501,27 @@ package paths to look at instead of one. The README is corrected in Phase 4 to n
 path and mark the other legacy.
 
 Source: `gh api /user/packages/container/model-catalog`, `gh auth status`, 2026-08-22.
+
+## Phase 2 revised: the formatter is pinned in a repo tool manifest, 2026-08-22
+
+The estate's .NET tooling note (`~/ServerManagement/docs/dotnet-tooling.md`) states the rule
+directly: a repository that enforces formatting or analysis "writes a committed
+`.config/dotnet-tools.json`, and CI's `dotnet tool restore` gets the same version everyone else
+has. The host copies float — `--update` moves them whenever it is run — and a formatter one
+version ahead of CI's reformats the whole repo on the next commit."
+
+That is not hypothetical here. This machine's global CSharpier was 1.3.0 while `ci.yml` pinned
+`1.2.*`; it had to be uninstalled and reinstalled by hand to format this repo the way CI would.
+A manifest makes that structural instead of remembered.
+
+It also explains the original failure rather than merely fixing it. `dotnet csharpier` is the
+*local-tool* invocation form and is correct — paired with a manifest. The workflow paired it with
+a **global** install, where CSharpier 1.x provides only a `csharpier` binary and no `dotnet-`
+shim. So the command was right and the install was wrong, which is why it reads as a working step.
+
+`.config/dotnet-tools.json` pins 1.2.6 and CI now runs `dotnet tool restore` before
+`dotnet csharpier check src tests`. Note `dotnet new tool-manifest` wrote the file to the
+repository root here; it was moved to `.config/`, which is the location the estate note names and
+the one the tooling searches by default.
+
+Source: `~/ServerManagement/docs/dotnet-tooling.md`, local `dotnet tool` runs, 2026-08-22.
