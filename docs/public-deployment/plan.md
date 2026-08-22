@@ -3,7 +3,7 @@
 **Goal** — Run ModelCatalog as the `modelcatalog` stack behind Caddy on
 `models.pinkrooster.nl`, built to the estate's operational contract, until all twelve of the
 spec's success criteria pass and the stale-feed alert has fired once on purpose.
-**Status** — phase 1 done
+**Status** — phase 3 in progress
 **Research** — `research.md`
 **Spec** — `spec.md` (status `buildable`, no blocking marks)
 
@@ -88,7 +88,7 @@ probe exits non-zero against a stopped service and zero against a running one.
 
 ## Phase 2 — Package the stack and publish the image
 
-**Status** — in progress
+**Status** — done
 **Rests on**
 - Phase 1 merged to `main`, so the image built here contains the contract changes Phase 3
   verifies.
@@ -133,7 +133,7 @@ every variable compose interpolates appears in `.env.example`.
 
 The first phase that touches `~/ServerManagement`. Two repositories change together.
 
-**Status** — not started
+**Status** — in progress
 **Rests on**
 - Phase 2's image is pullable from ghcr by tag.
 - The external `edge` and `telemetry` networks exist on this host — both were present

@@ -19,6 +19,12 @@ public sealed class TestAppFactory : WebApplicationFactory<Program>
     public List<FakeSource> Fakes { get; } = new();
     public string ApiKey { get; } = "test-key-" + Guid.NewGuid();
 
+    /// <summary>
+    /// What actually lands in configuration. Defaults to <see cref="ApiKey"/>; set to the empty
+    /// string to reproduce a scaffolded .env, where every key is present with no value.
+    /// </summary>
+    public string? ConfiguredApiKey { get; set; }
+
     protected override IHost CreateHost(IHostBuilder builder)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -29,7 +35,7 @@ public sealed class TestAppFactory : WebApplicationFactory<Program>
                 {
                     ["ModelRegistry:SnapshotPath"] = _snapshotPath,
                     ["ModelRegistry:ApiKeys:0:Name"] = "test",
-                    ["ModelRegistry:ApiKeys:0:Key"] = ApiKey,
+                    ["ModelRegistry:ApiKeys:0:Key"] = ConfiguredApiKey ?? ApiKey,
                     ["ModelRegistry:SyncCron"] = "0 0 0 1 1 ? 2100",
                     ["ModelRegistry:RunSyncOnStartup"] = "false",
                 }

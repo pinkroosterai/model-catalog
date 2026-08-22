@@ -20,7 +20,14 @@ public static class RefreshEndpoints
             "/refresh",
             (HttpContext ctx) =>
             {
-                var configured = apiKeyOptions.CurrentValue.ApiKeys;
+                // Blank keys do not count as configured. `.env.example` ships every key with no
+                // value, so a scaffolded .env sets ModelRegistry__ApiKeys__0__Key to the empty
+                // string — an entry that exists, making Count non-zero, while matching a request
+                // that sends an empty X-Api-Key header. Filtering here means an unfinished .env
+                // leaves refresh disabled rather than open.
+                var configured = apiKeyOptions
+                    .CurrentValue.ApiKeys.Where(k => !string.IsNullOrWhiteSpace(k.Key))
+                    .ToList();
                 if (configured.Count == 0)
                     return Results.Problem(
                         statusCode: 503,

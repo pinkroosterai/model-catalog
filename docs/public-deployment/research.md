@@ -525,3 +525,34 @@ repository root here; it was moved to `.config/`, which is the location the esta
 the one the tooling searches by default.
 
 Source: `~/ServerManagement/docs/dotnet-tooling.md`, local `dotnet tool` runs, 2026-08-22.
+
+## Phase 3 found: a scaffolded `.env` opened refresh and then crashed the container, 2026-08-22
+
+Two defects in the `.env.example` written in Phase 2, both found before anything was deployed and
+both caused by the same §5 instruction — "every key present, no values."
+
+**An empty key is not an absent key, and it authorised refresh.** `ApiKeyEntry.Key` defaults to
+`string.Empty`, and `RefreshEndpoints` guarded only on `configured.Count == 0`. A `.env` copied
+from the example sets `ModelRegistry__ApiKeys__0__Key=`, which produces an entry that *exists* —
+so the count is 1, refresh is "enabled", and `string.Equals(k.Key, provided)` matches any request
+sending `X-Api-Key:` with an empty value. Fixed by filtering blank keys before the count, so an
+unfinished `.env` leaves refresh disabled rather than open. `RefreshKeyConfigTests` covers it, and
+was confirmed to fail against the unfixed code rather than merely passing against the fixed one.
+
+**Empty optional values crash the container at startup.** Configuration binding converts what it
+finds, and `""` is found. A verbatim copy died with `Failed to convert configuration value '' at
+'ModelRegistry:StaleThresholdHours' to type 'System.Int32'` before reaching the scheduler — and
+`ModelRegistry__SyncCron=` would have failed next, an empty string not being a valid Quartz
+expression. With `restart: unless-stopped` that is a crash loop, from a file the estate's own
+convention told the operator to copy.
+
+The optional overrides are now commented out in the example with their defaults shown, which
+keeps them documented and present while making a verbatim copy boot. The credential keys stay
+uncommented because they are what an operator actually fills in, and the code fix above makes
+leaving them blank safe. Verified: a verbatim scaffold now reaches "Application started" with
+zero unhandled exceptions.
+
+Worth carrying to any other stack written from this template — §5's "no values" is right for a
+secret and wrong for a typed optional.
+
+Source: local runs against the built service, 2026-08-22.
