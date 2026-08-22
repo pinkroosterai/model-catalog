@@ -3,7 +3,7 @@
 **Goal** — Run ModelCatalog as the `modelcatalog` stack behind Caddy on
 `models.pinkrooster.nl`, built to the estate's operational contract, until all twelve of the
 spec's success criteria pass and the stale-feed alert has fired once on purpose.
-**Status** — phase 3 in progress
+**Status** — phase 4 in progress
 **Research** — `research.md`
 **Spec** — `spec.md` (status `buildable`, no blocking marks)
 
@@ -133,7 +133,7 @@ every variable compose interpolates appears in `.env.example`.
 
 The first phase that touches `~/ServerManagement`. Two repositories change together.
 
-**Status** — in progress
+**Status** — done
 **Rests on**
 - Phase 2's image is pullable from ghcr by tag.
 - The external `edge` and `telemetry` networks exist on this host — both were present
@@ -147,23 +147,23 @@ The first phase that touches `~/ServerManagement`. Two repositories change toget
 blocks nothing here: the scrape list is edited by hand either way.
 
 **Tasks**
-- [ ] Bring the stack up from the repository root with a real `.env`, mode 600 — the volume must
+- [x] Bring the stack up from the repository root with a real `.env`, mode 600 — the volume must
       come up owned by uid 1654, so confirm the service actually persists `snapshot.json` rather
       than only serving it; `research.md` explains why that failure is silent.
-- [ ] Measure a cold sync — start with no snapshot and time until reads stop returning 503 —
+- [x] Measure a cold sync — start with no snapshot and time until reads stop returning 503 —
       and set the healthcheck `start_period` above it, or Docker restarts the container mid-sync
       forever.
-- [ ] Add the scrape entry to the collector's `services` job and restart the collector — target
+- [x] Add the scrape entry to the collector's `services` job and restart the collector — target
       and labels are given in `research.md § The collector entry has a fixed shape`; note the
       port is 8080, not the 8000 most of the estate uses.
-- [ ] Add the `models.pinkrooster.nl` site block to `~/ServerManagement/stacks/caddy/Caddyfile`
+- [x] Add the `models.pinkrooster.nl` site block to `~/ServerManagement/stacks/caddy/Caddyfile`
       and reload — `import accesslog` rather than `accesslog_noquery` because this service's
       query parameters are filters and carry nothing about the visitor; `/metrics` and
       `/v1/refresh` both 404 at the edge, for which the `wa` and `assistant` blocks are the
       pattern; `/healthz` stays public.
-- [ ] Commit the two `~/ServerManagement` edits — a change that lives only in a working tree on
+- [x] Commit the two `~/ServerManagement` edits — a change that lives only in a working tree on
       the server is invisible to the next machine.
-- [ ] Walk the spec's twelve success criteria and record which pass.
+- [x] Walk the spec's twelve success criteria and record which pass.
 
 **Done when** — all twelve criteria in `spec.md § Success criteria` pass, including the two that
 only hold if the wiring is right: `/metrics` returns 404 publicly while the collector shows the
@@ -289,3 +289,38 @@ the global install this workflow used floats. That was already biting — this m
 1.3.0 against CI's `1.2.*` pin and needed a manual downgrade. The manifest pins 1.2.6 and CI runs
 `dotnet tool restore` first, which also makes the original `dotnet csharpier` command correct: it
 is the local-tool form, and it was the *install* that was wrong all along, not the command.
+
+**2026-08-22 — Phase 3 done. models.pinkrooster.nl is live.** Eleven of the spec's twelve
+criteria pass; the twelfth is the alert, which this plan assigns to Phase 4, so Phase 3's
+`Done when` reached one criterion past its own tasks. Recorded rather than waved through.
+
+| # | Criterion | Result |
+|---|---|---|
+| 1 | Model lookup with pricing, from outside this host | `openai/gpt-4o` 200, $2.50/$10.00 per M, merged from all three feeds. Also fetched from off-host: `anthropic/claude-sonnet-4.5` at $3/$15 |
+| 2 | Let's Encrypt certificate | issuer `Let's Encrypt CN=YE2`, subject `models.pinkrooster.nl`, valid to 2026-11-20 |
+| 3 | Healthy, no published port | `Up (healthy)`, `HostConfig.PortBindings=map[]` |
+| 4 | `/metrics` 404 public, visible to the collector | 404 at the edge; the three feeds appear in OpenObserve beside the estate's existing ones |
+| 5 | §7 log fields | all five present, `service=modelcatalog`, `event=sync.completed` |
+| 6 | Feed metric pair | `feed_expected_interval_seconds` 86400 × 3; `feed_last_success_timestamp_seconds` × 3 |
+| 7 | Stale-feed alert fired on purpose | **Phase 4** |
+| 8 | Rollback by `IMAGE_TAG` | rolled to `416e5ee`, served 200, rolled forward to `current` |
+| 9 | Restart serves the previous catalog | see below |
+| 10 | `.env.example` complete | clean clone + example as `.env` → `docker compose config` resolves; every interpolated variable present |
+| 11 | `/v1/refresh` 404 public, works inside | 404 public; 202 on `edge` with the key, 401 without |
+| 12 | `/v1/meta` over `edge` | 200 from a throwaway container |
+
+**2026-08-22 — Phase 3: criterion 9 needed a better test than the one written.** As worded — "a
+snapshot age older than the process uptime" — a plain restart does not show it: `RunSyncOnStartup`
+defaults to true and the sync finishes in about a second, so `FetchedAt` is newer than the process
+and the measurement proves nothing either way. Re-run with `RunSyncOnStartup=false`, the property
+is unambiguous: snapshot age 24s against 2.5s of uptime, 51 anthropic models served, and zero
+`sync.completed` lines. The catalog came off the volume.
+
+**2026-08-22 — Phase 3: the named volume was the right call, confirmed on the host.**
+`docker exec modelcatalog-api ls -ldn /app/data` reports `1654 1654`, and a 16 MB `snapshot.json`
+is written there. The bind mount the spec originally drafted would have been root-owned and
+unwritable by this image's user.
+
+**2026-08-22 — Phase 3: `start_period` set from measurement.** A cold sync took 1.17s; the worst
+case is bounded near 30s by the per-source timeout. 120s was a guess made before anything ran and
+is now 60s.
