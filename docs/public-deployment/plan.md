@@ -346,3 +346,40 @@ reads it, rather than only in the spec.
 renewal failure is silent for every site on this host; setting it is a change to the shared
 proxy's `.env` on behalf of one service, which is the estate-wide edit §9 asks not be made
 quietly. This certificate runs to 2026-11-20, so nothing is urgent.
+**2026-08-22 — Close: `/code-review a5c6b8a..HEAD`, 11 findings, all worked.** Two were verified
+against the running service before being accepted, and one turned out worse in context than
+reported.
+
+*Medium.* The container probe read `ASPNETCORE_HTTP_PORTS` before `ASPNETCORE_URLS`, inverting
+ASP.NET Core's own precedence — and the aspnet base image sets `ASPNETCORE_HTTP_PORTS=8080`, so
+an operator moving the server with `ASPNETCORE_URLS` got a container that served correctly and was
+permanently unhealthy. Worse, an *empty* `ASPNETCORE_HTTP_PORTS` survived the `??` chain as `""`,
+producing `http://127.0.0.1:/health`, which resolves to port 80 — where **Caddy's `:80` catch-all
+answers 204 on this very host**, so the probe would have reported *healthy* while the service was
+elsewhere. A false healthy is the worse direction. Both fixed and re-tested: with the server on
+5311 the probe now exits 1 from the real 503 under both env shapes, with no connection error.
+
+*Medium.* Stack traces were silently dropped from every log line — Serilog's console sink had
+rendered `{Exception}`, and the copied formatter writes only type and message, which makes a feed
+failure undiagnosable from the collector. A sixth field, `stack`, is added; §7 names the fields a
+line must carry, not the ones it may not.
+
+*Medium.* A first deployment whose every feed fails still writes a snapshot, because
+`SyncPipeline` swaps unconditionally — empty `Models`, `FetchedAt` now. It reported healthy,
+served `200 []`, passed its healthcheck, and could not be alerted on, since no feed had ever
+succeeded and `feed_last_success_timestamp_seconds` is absent by design in exactly that case.
+`/health` and `/healthz` now answer 503 when the catalog is empty and nothing has ever succeeded,
+covered by `EmptyCatalogHealthTests`.
+
+*Medium.* `CLAUDE.md` documented the global-install CSharpier pairing this work had just removed
+from CI — the file was re-teaching the mistake that hid four months of failures.
+
+*Low, all fixed.* The last-success metric was not re-seeded from the restored snapshot, so a
+restart with `RunSyncOnStartup=false` published an interval and no last-success, and half a pair
+cannot fire an alert. `model_registry_refresh_errors_total` still labelled by `source` while the
+new gauges label by `feed` — two spellings of one dimension. The public `X-Request-Id` was
+adopted unbounded and unvalidated. The cron default was written twice, so the scheduler and the
+interval metric could drift apart — the exact thing deriving it was meant to prevent.
+`release.yml`'s new header and `CLAUDE.md` both claimed the csproj version governs a release, when
+`-p:Version` from the tag overrides it, and `CLAUDE.md` still described a release workflow that
+no longer builds images.

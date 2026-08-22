@@ -5,8 +5,10 @@ name: Release
 # rolls back by sha — a tag-triggered image would leave `current` pointing at whatever was last
 # released rather than what main says.
 #
-# The package version is set by hand in ModelCatalog.Client.csproj, so bump it in the same
-# commit as the tag.
+# The tag decides the published version: the pack step passes -p:Version derived from it, which
+# overrides <Version> in ModelCatalog.Client.csproj. Bump the csproj with the tag anyway so the
+# repository does not misstate its own version — but a mismatch publishes the tag's version, not
+# the csproj's, and says nothing.
 on:
   push:
     tags: ['v*.*.*']

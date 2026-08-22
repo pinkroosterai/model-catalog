@@ -34,6 +34,10 @@ var snapshotPath = cfg["ModelRegistry:SnapshotPath"] ?? "data/snapshot.json";
 var staleHours = cfg.GetValue("ModelRegistry:StaleThresholdHours", 72);
 var aliasMapPath = cfg["ModelRegistry:AliasMapPath"] ?? "Aliases/alias-map.json";
 
+// One spelling of the default. The scheduler and feed_expected_interval_seconds must agree, and
+// two copies of a literal is how they stop agreeing.
+var syncCron = cfg["ModelRegistry:SyncCron"] ?? "0 0 1 * * ?";
+
 builder.Services.AddSingleton(new SnapshotStore(snapshotPath));
 builder.Services.AddSingleton(_ => AliasResolver.LoadFromFile(aliasMapPath));
 builder.Services.AddSingleton<LiteLlmNormalizer>();
@@ -87,11 +91,7 @@ builder.Services.AddQuartz(q =>
     {
         q.AddTrigger(t => t.ForJob(jobKey).WithIdentity("sync-startup").StartNow());
     }
-    q.AddTrigger(t =>
-        t.ForJob(jobKey)
-            .WithIdentity("sync-daily")
-            .WithCronSchedule(cfg["ModelRegistry:SyncCron"] ?? "0 0 1 * * ?")
-    );
+    q.AddTrigger(t => t.ForJob(jobKey).WithIdentity("sync-daily").WithCronSchedule(syncCron));
 });
 builder.Services.AddQuartzHostedService(opt => opt.WaitForJobsToComplete = true);
 
@@ -104,11 +104,22 @@ await app.Services.GetRequiredService<SnapshotStore>().TryLoadFromDiskAsync(Canc
 
 // §7's second feed metric. Published for every feed at startup, before any of them has run:
 // it states the contract, where feed_last_success_timestamp_seconds states the fact.
-var syncCron = cfg["ModelRegistry:SyncCron"] ?? "0 0 1 * * ?";
 if (CronInterval.SecondsBetweenRuns(syncCron, DateTimeOffset.UtcNow) is { } intervalSeconds)
 {
     foreach (var source in app.Services.GetServices<ISource>())
         MetricsRegistry.FeedExpectedIntervalSeconds.WithLabels(source.Name).Set(intervalSeconds);
+}
+
+// Re-seed the other half of the pair from the snapshot just restored. Without this, a restart
+// with RunSyncOnStartup=false — an option .env.example documents — publishes an expected interval
+// and no last-success until the next cron fire, and the stale-feed alert cannot match. Half a
+// pair is the "valid, enabled and matches nothing" failure §7 warns about.
+foreach (var state in app.Services.GetRequiredService<SnapshotStore>().Current?.SourceStates ?? [])
+{
+    if (state.LastSuccess is { } seeded)
+        MetricsRegistry
+            .FeedLastSuccessTimestampSeconds.WithLabels(state.Source)
+            .Set(seeded.ToUnixTimeSeconds());
 }
 
 app.MapOpenApi();
@@ -139,6 +150,19 @@ app.MapGet(
         var snap = store.Current;
         if (snap is null)
             return Results.Problem(statusCode: 503, detail: "Snapshot unavailable");
+
+        // A cold start where every feed failed still writes a snapshot — SyncPipeline swaps
+        // unconditionally, so Models is empty and FetchedAt is now. Without this the service
+        // reported healthy, served 200 [] to every query, and could not be alerted on: no feed
+        // ever succeeded, so feed_last_success_timestamp_seconds is absent by design and the
+        // stale-feed rule has nothing to match. An empty catalog nobody has ever filled is the
+        // one state worth failing on.
+        if (snap.Models.Count == 0 && !snap.SourceStates.Any(x => x.LastSuccess is not null))
+            return Results.Problem(
+                statusCode: 503,
+                detail: "Catalog is empty and no feed has ever succeeded"
+            );
+
         var age = clock.GetUtcNow() - snap.FetchedAt;
         var stale = age >= TimeSpan.FromHours(staleHours);
         return Results.Ok(
@@ -169,6 +193,12 @@ app.MapGet(
         var snap = store.Current;
         if (snap is null)
             return Results.Problem(statusCode: 503, detail: "Snapshot unavailable");
+        // Same reading as /health above: an empty catalog is not data to trust.
+        if (snap.Models.Count == 0 && !snap.SourceStates.Any(x => x.LastSuccess is not null))
+            return Results.Problem(
+                statusCode: 503,
+                detail: "Catalog is empty and no feed has ever succeeded"
+            );
         var age = clock.GetUtcNow() - snap.FetchedAt;
         return age < TimeSpan.FromHours(staleHours)
             ? Results.Ok(new { status = "healthy", snapshotAgeHours = age.TotalHours })

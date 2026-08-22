@@ -23,12 +23,18 @@ dotnet test tests/ModelCatalog.Service.Tests      # one project
 dotnet test ModelCatalog.slnx --filter "FullyQualifiedName~PriorityMergerTests"
 dotnet run --project src/ModelCatalog.Service     # syncs all 3 sources on boot, no launchSettings, so :5000
 
-dotnet tool install --global CSharpier --version 1.2.*   # not installed by default
+dotnet tool restore                               # CSharpier, pinned in .config/dotnet-tools.json
 dotnet csharpier format src tests
 dotnet csharpier check src tests                  # CI runs this before build; it fails the build
 ```
 
 Always pass the `.slnx`, never a directory — CI does, and the two differ.
+
+The formatter is a **local** tool, pinned in `.config/dotnet-tools.json`. Do not
+`dotnet tool install --global CSharpier` — CSharpier 1.x ships no `dotnet-csharpier` shim, so
+`dotnet csharpier` cannot resolve against a global install. That pairing is what failed every CI
+run from 2026-04-14 to 2026-08-22, in a step ahead of build and test, so nothing was compiled or
+tested in CI for four months while the badge said red for a formatting reason.
 
 ## Architecture
 
@@ -89,11 +95,22 @@ config and scraped metric surface.
   unit-tested against a fixture under `tests/.../Fixtures/<source>/sample.json`), an
   `AddHttpClient` registration with the shared retry+breaker policies, and its name added to
   the four `MergeOptions` lists.
-- Integration tests use `TestAppFactory`, which swaps all real `ISource`s for `FakeSource`
+- Integration tests use `TestAppFactory`, which swaps all real `ISource`s for `FakeSource`, drops
+  the Quartz hosted service (its `LogProvider` caches the first `ILoggerFactory` process-wide, so
+  a disposed host poisons every later one),
   and parks the cron in 2100 — never let a test hit the network.
 
 ## Release
 
-Tag `v*.*.*` on `main`. That pushes `ghcr.io/pinkroosterai/model-catalog` and packs
-`ModelCatalog.Client` to nuget.org with the version from the tag — but `<Version>` in
-`ModelCatalog.Client.csproj` is set by hand, so bump it in the same commit as the tag.
+**The image and the package release on different triggers.**
+
+The image is built by `ci.yml` on every push to `main`, gated on the tests, and pushed as
+`ghcr.io/pinkroosterai/modelcatalog:<git-short-sha>` plus a moving `:current`. The estate pulls
+`current` and rolls back by putting a sha in `IMAGE_TAG`. The same build also pushes
+`ghcr.io/pinkroosterai/model-catalog` — the name a public README on nuget.org has advertised
+since April — so existing self-hosters keep working and keep updating.
+
+Tagging `v*.*.*` publishes **only** the NuGet package. `release.yml` derives the version from the
+tag and passes it as `-p:Version`, which overrides `<Version>` in `ModelCatalog.Client.csproj` —
+so the tag decides what is published, and the csproj value is what a local `dotnet pack` uses.
+Bump it with the tag anyway, so the repository does not misstate its own version.

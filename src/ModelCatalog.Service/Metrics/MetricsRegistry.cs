@@ -4,8 +4,6 @@ namespace ModelCatalog.Service.Metrics;
 
 public static class MetricsRegistry
 {
-    private static readonly string[] SourceLabel = ["source"];
-
     // architecture-guideline.md §7 names both of these exactly, and the estate's
     // `feed-stale-daily` alert selects on the `feed` label by name. Two metrics rather than one
     // so the alert is the same shape for every feed and never has to know a cadence:
@@ -49,7 +47,7 @@ public static class MetricsRegistry
 
     public static readonly Counter RefreshErrors = Prometheus.Metrics.CreateCounter(
         "model_registry_refresh_errors_total",
-        "Refresh error count per source",
-        new CounterConfiguration { LabelNames = SourceLabel }
+        "Refresh error count per feed",
+        new CounterConfiguration { LabelNames = FeedLabel }
     );
 }

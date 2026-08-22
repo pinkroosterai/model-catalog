@@ -39,21 +39,30 @@ public static class HealthProbe
     }
 
     /// <summary>
-    /// Follows whatever the container was actually told to listen on, so the probe cannot drift
-    /// from the server. Falls back to the .NET default for these images.
+    /// Follows whatever the container was actually told to listen on.
+    ///
+    /// `ASPNETCORE_URLS` is checked first because that is ASP.NET Core's own precedence, and the
+    /// aspnet base image ships `ASPNETCORE_HTTP_PORTS=8080` — reading PORTS first meant an
+    /// operator who moved the server with URLS got a container that served correctly and was
+    /// permanently unhealthy.
+    ///
+    /// Both are treated as absent when blank. An empty PORTS used to survive the `??` chain as
+    /// the empty string, producing `http://127.0.0.1:/health`, which resolves to port 80 — where
+    /// on this host Caddy answers 204 and the probe reported *healthy* while the service was
+    /// somewhere else entirely. A false healthy is worse than a false unhealthy.
     /// </summary>
     private static string ProbeUrl()
     {
         var port =
-            Environment.GetEnvironmentVariable("ASPNETCORE_HTTP_PORTS")?.Split(';')[0]
-            ?? PortFromUrls(Environment.GetEnvironmentVariable("ASPNETCORE_URLS"))
+            PortFromUrls(Environment.GetEnvironmentVariable("ASPNETCORE_URLS"))
+            ?? FirstPort(Environment.GetEnvironmentVariable("ASPNETCORE_HTTP_PORTS"))
             ?? "8080";
 
-        return string.Create(
-            CultureInfo.InvariantCulture,
-            $"http://127.0.0.1:{port.Trim()}/health"
-        );
+        return string.Create(CultureInfo.InvariantCulture, $"http://127.0.0.1:{port}/health");
     }
+
+    private static string? FirstPort(string? ports) =>
+        string.IsNullOrWhiteSpace(ports) ? null : Digits(ports.Split(';')[0]);
 
     private static string? PortFromUrls(string? urls)
     {
@@ -63,10 +72,14 @@ public static class HealthProbe
         // "http://+:8080" or "http://localhost:5000;https://localhost:5001" — first binding wins.
         var first = urls.Split(';')[0];
         var colon = first.LastIndexOf(':');
-        if (colon < 0)
-            return null;
+        return colon < 0 ? null : Digits(first[(colon + 1)..].TrimEnd('/'));
+    }
 
-        var candidate = first[(colon + 1)..].TrimEnd('/');
-        return candidate.Length > 0 && candidate.All(char.IsAsciiDigit) ? candidate : null;
+    private static string? Digits(string? candidate)
+    {
+        candidate = candidate?.Trim();
+        return !string.IsNullOrEmpty(candidate) && candidate.All(char.IsAsciiDigit)
+            ? candidate
+            : null;
     }
 }

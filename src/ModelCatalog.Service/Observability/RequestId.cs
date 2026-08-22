@@ -20,4 +20,15 @@ public static class RequestId
 
     /// <summary>Short, readable, and not a UUID — these are read in a terminal.</summary>
     public static string New() => Guid.NewGuid().ToString("N")[..12];
+
+    /// <summary>The longest inbound id accepted. Generous next to the 12 this service mints.</summary>
+    private const int MaxLength = 64;
+
+    /// <summary>
+    /// Whether a caller-supplied id may be adopted. Bounded and restricted to characters that are
+    /// safe in a response header and readable in a log.
+    /// </summary>
+    public static bool IsWellFormed(string? id) =>
+        id is { Length: > 0 and <= MaxLength }
+        && id.All(c => char.IsAsciiLetterOrDigit(c) || c is '-' or '_' or '.');
 }

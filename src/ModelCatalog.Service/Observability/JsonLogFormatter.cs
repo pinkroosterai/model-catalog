@@ -71,6 +71,13 @@ public sealed class JsonLogFormatter(IOptions<JsonLogOptions> options)
             {
                 json.WriteString("error", exception.GetType().FullName);
                 json.WriteString("error_message", exception.Message);
+
+                // A sixth field, beyond §7's five. Serilog's console sink rendered {Exception}
+                // with the frames, and dropping them made a feed failure undiagnosable from the
+                // collector — type and message alone do not say where a fetch died. §7 names the
+                // fields a line must carry, not the ones it may not.
+                if (exception.StackTrace is { Length: > 0 } stack)
+                    json.WriteString("stack", stack);
             }
 
             json.WriteEndObject();
