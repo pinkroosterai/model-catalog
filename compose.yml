@@ -57,9 +57,11 @@ services:
       # only route out — the three upstream feeds are fetched directly, not through the outbound
       # cache. That deviation from §4 is recorded in ~/ArchitectureRedesign/docs/open-questions.md.
       - edge
-      # The collector scrapes /metrics over this. It is also listed in the collector's own static
-      # scrape job — a service is invisible until it is.
-      - telemetry
+      # No `telemetry` network. This service runs on pinkhen, which has no collector and will
+      # not have one until the telemetry stack itself moves — see
+      # ~/ServerManagement/docs/second-server-migration/spec.md. /metrics is still served and
+      # the log labels below are still written; there is simply nothing scraping them, so a
+      # worker that stops looping is noticed by a person rather than by an alert.
 
     healthcheck:
       # Asks the running app rather than curl, which this image does not carry. The probe fails
@@ -86,8 +88,3 @@ networks:
   edge:
     external: true
     name: ${EDGE_NETWORK:-edge}
-  # Shared and external like edge, but internal: true — it carries scrapes and nothing else.
-  # See architecture-guideline.md §4.
-  telemetry:
-    external: true
-    name: ${TELEMETRY_NETWORK:-telemetry}
