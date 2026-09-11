@@ -392,3 +392,9 @@ marked reversed in `spec.md § Decisions` and `research.md` rather than deleted.
 raised once and declined — a self-hoster following the April README now gets manifest-unknown.
 Deleting the package itself needs a `delete:packages` token scope and is the operator's step.
 
+**2026-09-11 — Note: cited paths that no longer exist.** The entries above cite
+`~/ServerManagement/stacks/telemetry/` and `scripts/telemetry-alerts.sh`. Both were removed
+when the old server was decommissioned. This service now runs on pinkhen, which has no
+collector or alerting. The files survive in that repository's git history. The entries above
+are left as written.
+

@@ -635,3 +635,11 @@ keep alive. The earlier finding stands as the record of what was weighed.
 
 Deleting the package needs a `delete:packages` scope the working token does not carry.
 
+## Note: cited sources removed from ServerManagement (2026-09-11)
+
+Several findings above are sourced from `~/ServerManagement/stacks/telemetry/`,
+`stacks/varnish/` and `scripts/telemetry-alerts.sh`. All three were removed on 2026-09-11,
+when the old server was decommissioned. This service now runs on pinkhen, which has no
+collector, no alerting and no outbound cache. The files survive in that repository's git
+history. The findings above stand as the record of what was read then.
+

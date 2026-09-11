@@ -54,14 +54,12 @@ services:
 
     networks:
       # Caddy reaches this over edge, estate consumers call it over edge, and it is also the
-      # only route out — the three upstream feeds are fetched directly, not through the outbound
-      # cache. That deviation from §4 is recorded in ~/ArchitectureRedesign/docs/open-questions.md.
+      # only route out — the three upstream feeds are fetched directly.
       - edge
-      # No `telemetry` network. This service runs on pinkhen, which has no collector and will
-      # not have one until the telemetry stack itself moves — see
-      # ~/ServerManagement/docs/second-server-migration/spec.md. /metrics is still served and
-      # the log labels below are still written; there is simply nothing scraping them, so a
-      # worker that stops looping is noticed by a person rather than by an alert.
+      # No `telemetry` network. This service runs on pinkhen, which has no collector. /metrics
+      # is still served and the log labels below are still written; there is simply nothing
+      # scraping them, so a worker that stops looping is noticed by a person rather than by an
+      # alert.
 
     healthcheck:
       # Asks the running app rather than curl, which this image does not carry. The probe fails
